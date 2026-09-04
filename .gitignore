@@ -1,0 +1,12 @@
+node_modules/
+.vercel/
+.tanstack/
+dist/
+.output/
+.nitro/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+src/soundassets/tts.csv

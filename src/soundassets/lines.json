@@ -1,0 +1,494 @@
+[
+  {
+    "file": "you_okay.wav",
+    "who": "YOU",
+    "mood": "tired calm",
+    "dialog": "Okay."
+  },
+  {
+    "file": "you_okay_again.wav",
+    "who": "YOU",
+    "mood": "tired resigned",
+    "dialog": "Okay. Again."
+  },
+  {
+    "file": "you_later.wav",
+    "who": "YOU",
+    "mood": "tired uneasy",
+    "dialog": "It's later than I thought."
+  },
+  {
+    "file": "you_fog.wav",
+    "who": "YOU",
+    "mood": "unsettled whisper",
+    "dialog": "The fog tastes like the kitchen."
+  },
+  {
+    "file": "you_hands.wav",
+    "who": "YOU",
+    "mood": "tense fear",
+    "dialog": "My hands are already shaking."
+  },
+  {
+    "file": "you_wet.wav",
+    "who": "YOU",
+    "mood": "uneasy flat",
+    "dialog": "The asphalt is wet. It wasn't raining."
+  },
+  {
+    "file": "you_warm.wav",
+    "who": "YOU",
+    "mood": "quiet dread",
+    "dialog": "The bowl is still warm. Too warm."
+  },
+  {
+    "file": "you_yeah.wav",
+    "who": "YOU",
+    "mood": "tired under-breath",
+    "dialog": "Yeah."
+  },
+  {
+    "file": "you_count.wav",
+    "who": "YOU",
+    "mood": "trying not to panic",
+    "dialog": "I already counted the lamps. There are more now."
+  },
+  {
+    "file": "you_home.wav",
+    "who": "YOU",
+    "mood": "defensive polite",
+    "dialog": "I'm just walking home."
+  },
+  {
+    "file": "you_not_leaving.wav",
+    "who": "YOU",
+    "mood": "scared firm",
+    "dialog": "I'm not leaving anything."
+  },
+  {
+    "file": "you_didnt_blink.wav",
+    "who": "YOU",
+    "mood": "aftershock whisper",
+    "dialog": "He never blinked."
+  },
+  {
+    "file": "you_evening.wav",
+    "who": "YOU",
+    "mood": "forced polite",
+    "dialog": "Good evening."
+  },
+  {
+    "file": "you_ramen.wav",
+    "who": "YOU",
+    "mood": "cautious",
+    "dialog": "Ramen."
+  },
+  {
+    "file": "you_soup.wav",
+    "who": "YOU",
+    "mood": "unconvincing",
+    "dialog": "It's soup."
+  },
+  {
+    "file": "you_bowl_talk.wav",
+    "who": "YOU",
+    "mood": "startled",
+    "dialog": "Did the bowl just—"
+  },
+  {
+    "file": "you_heard.wav",
+    "who": "YOU",
+    "mood": "afraid listening",
+    "dialog": "I think I heard something."
+  },
+  {
+    "file": "you_not_mine.wav",
+    "who": "YOU",
+    "mood": "certain fear",
+    "dialog": "Those footsteps aren't mine."
+  },
+  {
+    "file": "you_nothing.wav",
+    "who": "YOU",
+    "mood": "scared lie",
+    "dialog": "There's nothing—"
+  },
+  {
+    "file": "you_what_see.wav",
+    "who": "YOU",
+    "mood": "hushed dread",
+    "dialog": "What would I see?"
+  },
+  {
+    "file": "you_rock.wav",
+    "who": "YOU",
+    "mood": "disoriented",
+    "dialog": "I've seen that rock before."
+  },
+  {
+    "file": "you_how_long.wav",
+    "who": "YOU",
+    "mood": "exhausted lost",
+    "dialog": "How long have I been walking."
+  },
+  {
+    "file": "you_what_was.wav",
+    "who": "YOU",
+    "mood": "afterscare",
+    "dialog": "What was that."
+  },
+  {
+    "file": "you_name.wav",
+    "who": "YOU",
+    "mood": "thin unease",
+    "dialog": "Did you say my name?"
+  },
+  {
+    "file": "you_no.wav",
+    "who": "YOU",
+    "mood": "sudden fear",
+    "dialog": "No—"
+  },
+  {
+    "file": "you_face.wav",
+    "who": "YOU",
+    "mood": "recognition horror",
+    "dialog": "I know that face."
+  },
+  {
+    "file": "you_chicken.wav",
+    "who": "YOU",
+    "mood": "hesitant lie",
+    "dialog": "...chicken."
+  },
+  {
+    "file": "you_why.wav",
+    "who": "YOU",
+    "mood": "hollow",
+    "dialog": "Why."
+  },
+  {
+    "file": "you_light.wav",
+    "who": "YOU",
+    "mood": "cautious relief",
+    "dialog": "I can see the light."
+  },
+  {
+    "file": "you_light_moved.wav",
+    "who": "YOU",
+    "mood": "hushed dread",
+    "dialog": "The light moved."
+  },
+  {
+    "file": "you_almost.wav",
+    "who": "YOU",
+    "mood": "breathless",
+    "dialog": "Almost there."
+  },
+  {
+    "file": "you_just_ramen.wav",
+    "who": "YOU",
+    "mood": "soft denial",
+    "dialog": "It's just ramen."
+  },
+  {
+    "file": "ramen_dont_spill.wav",
+    "who": "RAMEN",
+    "mood": "intimate wrong-calm",
+    "dialog": "Don't spill me."
+  },
+  {
+    "file": "ramen_deal.wav",
+    "who": "RAMEN",
+    "mood": "even instructional",
+    "dialog": "Twenty minutes. Then you eat. That was the deal."
+  },
+  {
+    "file": "ramen_easy.wav",
+    "who": "RAMEN",
+    "mood": "soft correction",
+    "dialog": "Easy."
+  },
+  {
+    "file": "ramen_tilting.wav",
+    "who": "RAMEN",
+    "mood": "matter-of-fact",
+    "dialog": "You're tilting."
+  },
+  {
+    "file": "ramen_left.wav",
+    "who": "RAMEN",
+    "mood": "calm correction",
+    "dialog": "Left. No—level."
+  },
+  {
+    "file": "ramen_hey.wav",
+    "who": "RAMEN",
+    "mood": "intimate wrong",
+    "dialog": "Hey."
+  },
+  {
+    "file": "ramen_level.wav",
+    "who": "RAMEN",
+    "mood": "controlling calm",
+    "dialog": "Keep me level. Look only when you have to."
+  },
+  {
+    "file": "ramen_counting.wav",
+    "who": "RAMEN",
+    "mood": "pleased whisper",
+    "dialog": "He was counting your steps."
+  },
+  {
+    "file": "ramen_with_us.wav",
+    "who": "RAMEN",
+    "mood": "calm danger",
+    "dialog": "Something is walking with us."
+  },
+  {
+    "file": "ramen_wind.wav",
+    "who": "RAMEN",
+    "mood": "cold reassurance",
+    "dialog": "It's just the wind. Probably."
+  },
+  {
+    "file": "ramen_dont_look.wav",
+    "who": "RAMEN",
+    "mood": "urgent whisper",
+    "dialog": "Don't look behind you."
+  },
+  {
+    "file": "ramen_said_dont.wav",
+    "who": "RAMEN",
+    "mood": "quiet anger",
+    "dialog": "I said don't."
+  },
+  {
+    "file": "ramen_not_anymore.wav",
+    "who": "RAMEN",
+    "mood": "cold final",
+    "dialog": "Not anymore."
+  },
+  {
+    "file": "ramen_good_walk.wav",
+    "who": "RAMEN",
+    "mood": "leash calm",
+    "dialog": "Good. Keep walking."
+  },
+  {
+    "file": "ramen_remember.wav",
+    "who": "RAMEN",
+    "mood": "gentle wrong",
+    "dialog": "Nothing you want to remember."
+  },
+  {
+    "file": "ramen_gaps.wav",
+    "who": "RAMEN",
+    "mood": "ominous story",
+    "dialog": "They live in the gaps between the lamps."
+  },
+  {
+    "file": "ramen_road.wav",
+    "who": "RAMEN",
+    "mood": "old knowledge",
+    "dialog": "The road remembers everyone who runs."
+  },
+  {
+    "file": "ramen_how_long.wav",
+    "who": "RAMEN",
+    "mood": "forbidding",
+    "dialog": "Longer than twenty minutes. Don't check."
+  },
+  {
+    "file": "ramen_dont_answer.wav",
+    "who": "RAMEN",
+    "mood": "sharp whisper",
+    "dialog": "Don't answer it."
+  },
+  {
+    "file": "ramen_dont_thank.wav",
+    "who": "RAMEN",
+    "mood": "ritual quiet",
+    "dialog": "Don't thank them."
+  },
+  {
+    "file": "ramen_names.wav",
+    "who": "RAMEN",
+    "mood": "uncanny proud",
+    "dialog": "I can say names I was never given."
+  },
+  {
+    "file": "ramen_faster.wav",
+    "who": "RAMEN",
+    "mood": "coach threat",
+    "dialog": "Walk faster. But not too fast. You know what happens."
+  },
+  {
+    "file": "ramen_second_look.wav",
+    "who": "RAMEN",
+    "mood": "tighter warning",
+    "dialog": "Still don't look."
+  },
+  {
+    "file": "ramen_tray.wav",
+    "who": "RAMEN",
+    "mood": "urgent control",
+    "dialog": "Keep the bowl on the tray. Don't look at it."
+  },
+  {
+    "file": "ramen_wanted_me.wav",
+    "who": "RAMEN",
+    "mood": "flattered calm",
+    "dialog": "It didn't want you. It wanted me."
+  },
+  {
+    "file": "ramen_try_again.wav",
+    "who": "RAMEN",
+    "mood": "calm warning",
+    "dialog": "It will try again if you run."
+  },
+  {
+    "file": "ramen_warm.wav",
+    "who": "RAMEN",
+    "mood": "wrong confession",
+    "dialog": "Because I'm warm. Because I'm full. Because I remember being eaten."
+  },
+  {
+    "file": "ramen_eat_you.wav",
+    "who": "RAMEN",
+    "mood": "helpful threat",
+    "dialog": "If you spill me they will eat you instead."
+  },
+  {
+    "file": "ramen_almost.wav",
+    "who": "RAMEN",
+    "mood": "too-calm guide",
+    "dialog": "Almost there."
+  },
+  {
+    "file": "ramen_not_porch.wav",
+    "who": "RAMEN",
+    "mood": "cold certain",
+    "dialog": "That's not the porch yet."
+  },
+  {
+    "file": "ramen_focus.wav",
+    "who": "RAMEN",
+    "mood": "tight whisper",
+    "dialog": "Don't get distracted now."
+  },
+  {
+    "file": "ramen_good.wav",
+    "who": "RAMEN",
+    "mood": "possessive affection",
+    "dialog": "You've been good to me."
+  },
+  {
+    "file": "ramen_no_isnt.wav",
+    "who": "RAMEN",
+    "mood": "gentle wrong",
+    "dialog": "No. It isn't."
+  },
+  {
+    "file": "sentinel_excuse.wav",
+    "who": "SENTINEL",
+    "mood": "dry formal",
+    "dialog": "Excuse me."
+  },
+  {
+    "file": "sentinel_all_say.wav",
+    "who": "SENTINEL",
+    "mood": "dry contempt",
+    "dialog": "That's what they all say."
+  },
+  {
+    "file": "sentinel_name.wav",
+    "who": "SENTINEL",
+    "mood": "dry report",
+    "dialog": "The last person who carried something warm down this road left their name in me."
+  },
+  {
+    "file": "sentinel_keep.wav",
+    "who": "SENTINEL",
+    "mood": "dry possessive",
+    "dialog": "I still have it. In case they come back."
+  },
+  {
+    "file": "sentinel_already.wav",
+    "who": "SENTINEL",
+    "mood": "dry certain",
+    "dialog": "You already have."
+  },
+  {
+    "file": "sentinel_warm.wav",
+    "who": "SENTINEL",
+    "mood": "dry almost-kind",
+    "dialog": "Warm things don't last on this road."
+  },
+  {
+    "file": "watcher_evening.wav",
+    "who": "WATCHER",
+    "mood": "too polite",
+    "dialog": "Good evening."
+  },
+  {
+    "file": "watcher_carrying.wav",
+    "who": "WATCHER",
+    "mood": "focused polite",
+    "dialog": "What are you carrying?"
+  },
+  {
+    "file": "watcher_asked.wav",
+    "who": "WATCHER",
+    "mood": "polite correction",
+    "dialog": "That's not what I asked."
+  },
+  {
+    "file": "watcher_is_it.wav",
+    "who": "WATCHER",
+    "mood": "still polite",
+    "dialog": "Is it?"
+  },
+  {
+    "file": "watcher_careful.wav",
+    "who": "WATCHER",
+    "mood": "helpful wrong",
+    "dialog": "Be careful with the lid. Things climb out."
+  },
+  {
+    "file": "watcher_again.wav",
+    "who": "WATCHER",
+    "mood": "unhurried we",
+    "dialog": "We keep meeting people who are almost home."
+  },
+  {
+    "file": "hunger_beef.wav",
+    "who": "THE HUNGER",
+    "mood": "wet curious",
+    "dialog": "Is that beef?"
+  },
+  {
+    "file": "hunger_smell.wav",
+    "who": "THE HUNGER",
+    "mood": "wet pleased",
+    "dialog": "I can smell the egg from here."
+  },
+  {
+    "file": "hunger_liar.wav",
+    "who": "THE HUNGER",
+    "mood": "wet angry",
+    "dialog": "Liar."
+  },
+  {
+    "file": "hunger_share.wav",
+    "who": "THE HUNGER",
+    "mood": "wet demand",
+    "dialog": "Share."
+  },
+  {
+    "file": "hunger_pork.wav",
+    "who": "THE HUNGER",
+    "mood": "wet satisfied",
+    "dialog": "I prefer pork."
+  }
+]
