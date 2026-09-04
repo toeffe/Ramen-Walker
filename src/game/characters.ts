@@ -15,7 +15,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
  * texture + tint (see kitCharacter in world.ts) — that's what gives five
  * different-feeling characters out of one rig.
  */
-export type CharacterKey = "sentinel" | "watcher" | "hunger" | "other" | "glimpse";
+export type CharacterKey = "sentinel" | "watcher" | "hunger" | "other" | "glimpse" | "player";
 export type SkinKey = "humanMale" | "humanFemale" | "zombieMale" | "zombieFemale";
 
 const SKIN_FILES: Record<SkinKey, string> = {
@@ -32,6 +32,7 @@ export const CHARACTER_SKIN: Record<CharacterKey, SkinKey> = {
   sentinel: "humanMale",
   watcher: "humanFemale",
   other: "humanMale",
+  player: "humanMale",
   hunger: "zombieMale",
   glimpse: "zombieFemale",
 };

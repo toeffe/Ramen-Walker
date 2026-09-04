@@ -201,6 +201,10 @@ export function getLine(id: LineId) {
   return line;
 }
 
+export function findLine(id: string) {
+  return BY_ID.get(id) ?? null;
+}
+
 export const VOICE_NOTES: Record<Speaker, string> = {
   YOU: "Tired walker, quiet, close-mic, 20s–30s, trying to stay calm.",
   RAMEN: "Intimate, almost in the ear, too calm, slightly wrong. Not cute.",

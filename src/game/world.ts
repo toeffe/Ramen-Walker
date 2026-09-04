@@ -290,6 +290,8 @@ export type CharacterRig = {
   handL: THREE.Object3D;
   handR: THREE.Object3D;
   mixer: THREE.AnimationMixer;
+  idleAction: THREE.AnimationAction | null;
+  runAction: THREE.AnimationAction | null;
 };
 
 const neutralizeScale = new THREE.Vector3();
@@ -377,21 +379,29 @@ function kitCharacter(
   outer.add(inner);
 
   const mixer = new THREE.AnimationMixer(inner);
-  const idle = THREE.AnimationClip.findByName(chars.clips, "idle");
-  if (idle) mixer.clipAction(idle).play();
+  const idleClip = THREE.AnimationClip.findByName(chars.clips, "idle");
+  const runClip = THREE.AnimationClip.findByName(chars.clips, "run");
+  const idleAction = idleClip ? mixer.clipAction(idleClip) : null;
+  const runAction = runClip ? mixer.clipAction(runClip) : null;
+  idleAction?.play();
 
-  return { outer, head, torso, armL, armR, foreArmL, foreArmR, handL, handR, mixer };
+  return { outer, head, torso, armL, armR, foreArmL, foreArmR, handL, handR, mixer, idleAction, runAction };
 }
 
 export type Viewmodel = {
   root: THREE.Group;
   carry: THREE.Group;
+  hands: THREE.Group;
+  /** Palms on the tray rims, fingers along the board — waiter-only, so the
+   * FPS finger sticks don't point at the balancer camera. */
+  grips: THREE.Group;
   tray: THREE.Group;
   ramen: THREE.Group;
   contents: THREE.Group;
   broth: THREE.Mesh;
   steam: THREE.Sprite[];
   noodles: THREE.Mesh[];
+  noodleMound: THREE.Mesh;
   noodleRest: { pos: THREE.Vector3; rot: THREE.Euler }[];
 };
 
@@ -429,6 +439,8 @@ export type World = {
   fireflies: THREE.Points;
   mixers: THREE.AnimationMixer[];
   viewmodel: Viewmodel;
+  /** Kenney CC0 human (same pack as the NPCs). Waiter camera only. */
+  walkerBody: CharacterRig;
   flashlight: THREE.SpotLight;
   fogTime: { value: number };
   geos: THREE.BufferGeometry[];
@@ -1499,6 +1511,21 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   otherWalker.visible = false;
   scene.add(otherWalker);
 
+  // Co-op walker — Kenney "Animated Characters 3" (CC0), same rig as every
+  // NPC. Hidden from the first-person camera; the waiter sees this instead
+  // of the FPS arms. Hands are IK'd onto the tray each frame.
+  const walkerBody = kitCharacter(chars, "player", track, mat, {
+    tint: 0xb9a890,
+    roughness: 0.88,
+    scale: 1.0,
+  });
+  mixers.push(walkerBody.mixer);
+  walkerBody.outer.visible = false;
+  const walkerFill = new THREE.PointLight(0xffe6c4, 0.7, 4, 1.8);
+  walkerFill.position.set(0, 1.4, -0.45);
+  walkerBody.outer.add(walkerFill);
+  scene.add(walkerBody.outer);
+
   // Fireflies
   const fireflyCount = 90;
   const fPos = new Float32Array(fireflyCount * 3);
@@ -1531,7 +1558,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   camera.add(flashTarget);
   flashlight.target = flashTarget;
 
-  const viewmodel = buildViewmodel(camera, mat, track);
+  const viewmodel = buildViewmodel(scene, mat, track);
 
   return {
     mailbox,
@@ -1559,6 +1586,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     fireflies,
     mixers,
     viewmodel,
+    walkerBody,
     flashlight,
     fogTime,
     geos,
@@ -1567,12 +1595,18 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
 }
 
 function buildViewmodel(
-  camera: THREE.Camera,
+  scene: THREE.Scene,
   mat: <T extends THREE.Material>(m: T) => T,
   track: (g: THREE.BufferGeometry) => THREE.BufferGeometry,
 ): Viewmodel {
+  // World-space rig (not camera-attached) so a second, independently
+  // positioned camera (e.g. a co-op "waiter" player) can view the tray
+  // and bowl from any angle, including from the front looking back at
+  // the walker. The engine positions/rotates `root` every frame to
+  // track the walker's head (position + yaw + pitch + bob), so it reads
+  // identically to a camera-attached viewmodel for the walker itself.
   const root = new THREE.Group();
-  camera.add(root);
+  scene.add(root);
 
   const carry = new THREE.Group();
   carry.position.set(0, -0.4, -0.68);
@@ -1614,7 +1648,12 @@ function buildViewmodel(
     }),
   );
   const noodleM = mat(
-    new THREE.MeshStandardMaterial({ color: 0xd4b26a, roughness: 0.42, metalness: 0.02 }),
+    new THREE.MeshStandardMaterial({
+      color: 0xd4b26a,
+      roughness: 0.42,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    }),
   );
   const noriM = mat(
     new THREE.MeshStandardMaterial({ color: 0x1a2a1c, roughness: 0.65 }),
@@ -1677,7 +1716,34 @@ function buildViewmodel(
     g.rotation.y = -side * 0.12;
     return g;
   }
-  carry.add(makeHand(-1), makeHand(1));
+  const hands = new THREE.Group();
+  hands.add(makeHand(-1), makeHand(1));
+  carry.add(hands);
+
+  function makeGrip(side: number) {
+    const g = new THREE.Group();
+    const palm = new THREE.Mesh(track(new THREE.SphereGeometry(0.05, 7, 5)), skin);
+    palm.scale.set(0.7, 0.45, 1.15);
+    palm.position.set(side * 0.02, 0.04, 0);
+    g.add(palm);
+    const tips = [-0.05, -0.018, 0.018, 0.05];
+    for (const z of tips) {
+      const f = new THREE.Mesh(track(new THREE.CylinderGeometry(0.011, 0.009, 0.08, 5)), skin);
+      f.rotation.z = side * (Math.PI / 2);
+      f.position.set(-side * 0.055, 0.035, z);
+      g.add(f);
+    }
+    const thumb = new THREE.Mesh(track(new THREE.CylinderGeometry(0.012, 0.01, 0.05, 5)), skin);
+    thumb.rotation.x = Math.PI / 2;
+    thumb.position.set(side * 0.01, 0.03, 0.08);
+    g.add(thumb);
+    g.position.set(side * 0.3, 0.0, 0.02);
+    return g;
+  }
+  const grips = new THREE.Group();
+  grips.add(makeGrip(-1), makeGrip(1));
+  grips.visible = false;
+  carry.add(grips);
 
   const chopA = new THREE.Mesh(track(new THREE.CylinderGeometry(0.005, 0.004, 0.22, 6)), chopM);
   chopA.rotation.z = Math.PI / 2;
@@ -1737,11 +1803,17 @@ function buildViewmodel(
       );
     }
     const curve = new THREE.CatmullRomCurve3(pts);
-    const t = new THREE.Mesh(track(new THREE.TubeGeometry(curve, 12, 0.0045, 5, false)), noodleM);
+    const t = new THREE.Mesh(track(new THREE.TubeGeometry(curve, 12, 0.0065, 5, false)), noodleM);
     contents.add(t);
     noodles.push(t);
     noodleRest.push({ pos: t.position.clone(), rot: t.rotation.clone() });
   }
+
+  const noodleMound = new THREE.Mesh(track(new THREE.SphereGeometry(0.078, 12, 8)), noodleM);
+  noodleMound.scale.set(1, 0.42, 1);
+  noodleMound.position.set(0, 0.068, 0);
+  noodleMound.visible = false;
+  contents.add(noodleMound);
 
   const nori = new THREE.Mesh(track(new THREE.BoxGeometry(0.038, 0.002, 0.07)), noriM);
   nori.rotation.x = 0.55;
@@ -1772,7 +1844,7 @@ function buildViewmodel(
         transparent: true,
         opacity: 0,
         depthWrite: false,
-        depthTest: false,
+        depthTest: true,
         blending: THREE.AdditiveBlending,
         fog: false,
         alphaTest: 0.01,
@@ -1786,7 +1858,7 @@ function buildViewmodel(
   }
 
   tray.add(ramen);
-  return { root, carry, tray, ramen, contents, broth, steam, noodles, noodleRest };
+  return { root, carry, hands, grips, tray, ramen, contents, broth, steam, noodles, noodleMound, noodleRest };
 }
 
 export function disposeWorld(world: World) {

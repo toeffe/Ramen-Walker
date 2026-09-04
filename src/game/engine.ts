@@ -18,11 +18,21 @@ import {
 import { disposeArt, type GameArt } from "@/game/art";
 import type { CharacterAssets } from "@/game/characters";
 import {
+  findLine,
   getLine,
   RAMEN_ASIDES,
   YOU_ASIDES,
   type LineId,
 } from "@/game/dialogue";
+
+type ScareKind = "none" | "face" | "hunger" | "watcher" | "hands" | "mailbox";
+const SCARE_KINDS: ReadonlySet<string> = new Set([
+  "face",
+  "hunger",
+  "watcher",
+  "hands",
+  "mailbox",
+]);
 
 type ControlsProbe = {
   getYaw: () => number;
@@ -43,6 +53,58 @@ declare global {
 type StoryEvent = { distance: number; triggered?: boolean; run: () => void };
 type HoldKind = "sentinel" | "watcher" | "hunger" | "other" | "watcher2";
 type QueuedLine = { id: LineId; after?: () => void; event?: HoldKind };
+
+export type CoopSnapshot = {
+  x: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+  trayRoll: number;
+  trayPitch: number;
+  bowlX: number;
+  bowlZ: number;
+  distance: number;
+  spilled: boolean;
+  started: boolean;
+  ended: boolean;
+  speed: number;
+  grabbing: boolean;
+  endingKind: "home" | "taken";
+  mailboxArmed: boolean;
+  lampKilled: boolean;
+  blackout: number;
+  hungerLunging: boolean;
+  hungerLunge: number;
+  glimpseOn: boolean;
+  glimpseSide: number;
+  bushHands: boolean;
+  wrongHouse: boolean;
+  wrongHouseLit: number;
+  strangerOn: boolean;
+  strangerX: number;
+  strangerZ: number;
+  monsterOn: boolean;
+  monsterX: number;
+  monsterZ: number;
+  monsterGlow: number;
+  otherOn: boolean;
+  otherX: number;
+  otherZ: number;
+  faceOn: boolean;
+  faceX: number;
+  faceY: number;
+  faceZ: number;
+  faceScale: number;
+  lineSeq: number;
+  lineId: string;
+  scareSeq: number;
+  scareKind: ScareKind;
+  warnSeq: number;
+  warn: string;
+  fxSeq: number;
+  fx: number;
+  footSeq: number;
+};
 
 const HOLD_LEAVE_DIST = 14;
 // How long (seconds) the camera is force-turned toward a talking NPC before
@@ -73,6 +135,41 @@ export class RamenGame {
   private trayRoll = 0;
   private trayPitch = 0;
   private trayRollV = 0;
+  // --- co-op "waiter" camera -------------------------------------------
+  // A second, independently rendered camera that always looks at the
+  // tray from the opposite side of the walker — i.e. facing the walker,
+  // as if standing across the tray from them. Only active when
+  // enableWaiterView() has been called (multiplayer mode). It shares the
+  // same scene, so it needs no extra world state, just its own renderer
+  // and canvas target.
+  private waiterCamera: THREE.PerspectiveCamera | null = null;
+  private waiterRenderer: THREE.WebGLRenderer | null = null;
+  private waiterCanvas: HTMLCanvasElement | null = null;
+  private waiterFocus = new THREE.Vector3();
+  private waiterGrabCam = new THREE.Vector3();
+  private waiterGrabFocus = new THREE.Vector3();
+  // When true, this instance is a networked thin client (the Waiter's
+  // machine): local WASD/tray physics are skipped and state instead
+  // comes from applyHostSnapshot() each time the Host streams a frame.
+  private remoteDriven = false;
+  // Host-only: once a Waiter is connected they own mouse/touch tray tilt.
+  // Walker mouse becomes look-only so both players aren't fighting the bowl.
+  private waiterOwnsTray = false;
+  private storyLineSeq = 0;
+  private storyLineId = "";
+  private storyScareSeq = 0;
+  private storyWarnSeq = 0;
+  private storyWarnText = "";
+  private storyFxSeq = 0;
+  private storyFx = 0;
+  private storyFootSeq = 0;
+  private endingKind: "home" | "taken" = "home";
+  private appliedLineSeq = -1;
+  private appliedScareSeq = -1;
+  private appliedWarnSeq = -1;
+  private appliedFxSeq = -1;
+  private appliedFootSeq = -1;
+  private walkerRunning = false;
   private trayPitchV = 0;
   private sloshX = 0;
   private sloshZ = 0;
@@ -89,7 +186,7 @@ export class RamenGame {
   private lastFoot = 0;
   private trauma = 0;
   private scareT = 0;
-  private scareKind: "none" | "face" | "hunger" | "watcher" | "hands" | "mailbox" = "none";
+  private scareKind: ScareKind = "none";
   private hungerLunge = 0;
   private hungerLunging = false;
   private flashlightFlicker = 0;
@@ -208,7 +305,100 @@ export class RamenGame {
     this.camera.aspect = w / Math.max(1, h);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
+    this.resizeWaiter();
   };
+
+  private resizeWaiter = () => {
+    if (!this.waiterCamera || !this.waiterRenderer || !this.waiterCanvas) return;
+    const w = this.waiterCanvas.clientWidth || window.innerWidth;
+    const h = this.waiterCanvas.clientHeight || window.innerHeight;
+    this.waiterCamera.aspect = w / Math.max(1, h);
+    this.waiterCamera.updateProjectionMatrix();
+    this.waiterRenderer.setSize(w, h, false);
+  };
+
+  /**
+   * Turns on the second "waiter" camera, rendered into its own canvas.
+   * The waiter camera always looks at the tray from the opposite side
+   * of the walker — as if standing across the tray, facing them — so it
+   * needs no independent input of its own beyond being told when to
+   * resize. Call disableWaiterView() / dispose() to tear it down.
+   */
+  enableWaiterView(canvas: HTMLCanvasElement) {
+    this.waiterCanvas = canvas;
+    this.waiterCamera = new THREE.PerspectiveCamera(72, 1, 0.08, 70);
+    this.waiterRenderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: "high-performance",
+      alpha: false,
+    });
+    this.waiterRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    this.waiterRenderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.waiterRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.waiterRenderer.toneMappingExposure = 1.08;
+    this.resizeWaiter();
+  }
+
+  disableWaiterView() {
+    this.waiterRenderer?.dispose();
+    this.waiterCamera = null;
+    this.waiterRenderer = null;
+    this.waiterCanvas = null;
+  }
+
+  /**
+   * Across the tray, lower than a top-down shot, looking at the walker so
+   * the road behind them stays in frame. Slight downward aim still shows
+   * into the bowl.
+   */
+  private placeWaiterCamera() {
+    if (!this.waiterCamera) return;
+    const trayWorld = this.tmp;
+    this.world.viewmodel.carry.getWorldPosition(trayWorld);
+
+    const fx = -Math.sin(this.yaw);
+    const fz = -Math.cos(this.yaw);
+    const stand = 1.48;
+    this.waiterCamera.position.set(
+      trayWorld.x + fx * stand,
+      trayWorld.y + 0.28,
+      trayWorld.z + fz * stand,
+    );
+    this.waiterFocus.set(
+      trayWorld.x * 0.4 + this.yawObject.position.x * 0.6,
+      1.34,
+      trayWorld.z * 0.4 + this.yawObject.position.z * 0.6,
+    );
+    this.waiterCamera.up.set(0, 1, 0);
+    this.waiterCamera.lookAt(this.waiterFocus);
+  }
+
+  private syncWaiterCamera() {
+    if (!this.waiterCamera) return;
+    this.resizeWaiter();
+    if (this.grabbing && this.remoteDriven) {
+      const t = this.last * 0.001;
+      const s = this.trauma * this.trauma;
+      this.waiterCamera.position.set(
+        this.waiterGrabCam.x + (Math.sin(t * 47) * 0.08 + Math.sin(t * 23) * 0.04) * s,
+        this.waiterGrabCam.y + Math.sin(t * 31) * 0.03 * s,
+        this.waiterGrabCam.z + (Math.cos(t * 41) * 0.05) * s,
+      );
+      this.waiterCamera.up.set(0, 1, 0);
+      this.waiterCamera.lookAt(this.waiterGrabFocus);
+      return;
+    }
+    this.placeWaiterCamera();
+    if (this.trauma > 0.02) {
+      const t = this.last * 0.001;
+      const s = this.trauma * this.trauma;
+      this.waiterCamera.position.x +=
+        (Math.sin(t * 47) * 0.08 + Math.sin(t * 23) * 0.04) * s;
+      this.waiterCamera.position.y += Math.sin(t * 31) * 0.03 * s;
+      this.waiterCamera.lookAt(this.waiterFocus);
+    }
+  }
 
   private bind() {
     this.onKeyDown = (e) => {
@@ -222,7 +412,7 @@ export class RamenGame {
     this.onBlur = () => this.keys.clear();
     this.onResize = () => this.resize();
     this.onWantLock = (e) => {
-      if (!this.started || this.ended) return;
+      if (this.remoteDriven || !this.started || this.ended) return;
       if (e.pointerType !== "mouse" && e.pointerType !== "pen") return;
       this.tryLock();
     };
@@ -232,7 +422,7 @@ export class RamenGame {
       this.canvas.style.cursor = locked || (this.started && !this.ended) ? "none" : "";
     };
     this.onPtrDown = (e) => {
-      if (!this.started || this.ended) return;
+      if (this.remoteDriven || !this.started || this.ended) return;
       if (e.pointerType !== "mouse" && e.pointerType !== "pen") return;
       this.tryLock();
       if (e.button !== 0) return;
@@ -248,6 +438,7 @@ export class RamenGame {
     this.onPtrMove = (e) => {
       if (!this.started || this.ended) return;
       if (e.pointerType !== "mouse" && e.pointerType !== "pen") return;
+      if (this.remoteDriven) return;
 
       const locked = document.pointerLockElement === this.canvas;
       const looking = this.dragging || (e.buttons & 1) === 1;
@@ -265,7 +456,9 @@ export class RamenGame {
         return;
       }
 
-      if (looking) {
+      // Solo: hold LMB to look, otherwise mouse-x tilts the tray.
+      // Co-op walker: a connected waiter owns tilt, so all mouse is look.
+      if (looking || this.waiterOwnsTray) {
         this.yaw -= dx * 0.0028;
         this.pitch -= dy * 0.0028;
         this.pitch = Math.max(-1.15, Math.min(0.85, this.pitch));
@@ -295,6 +488,7 @@ export class RamenGame {
 
   private tryLock() {
     if (!this.started || this.ended || this.disposed) return;
+    if (!document.hasFocus()) return;
     const el = this.canvas as HTMLCanvasElement & {
       requestPointerLock: (opts?: { unadjustedMovement?: boolean }) => Promise<void> | void;
     };
@@ -320,6 +514,10 @@ export class RamenGame {
         /* ignore */
       }
     }
+  }
+
+  unlockAudio() {
+    this.audio.unlock();
   }
 
   start() {
@@ -348,6 +546,188 @@ export class RamenGame {
   addBalanceDelta(dx: number, dy = 0) {
     this.balanceDx += dx;
     this.balanceDy += dy;
+  }
+
+  // --- co-op networking surface -----------------------------------------
+  //
+  // The Host (Walker's machine) calls getHostSnapshot() once per frame
+  // and streams it to the Guest. The Guest calls applyHostSnapshot()
+  // each time one arrives instead of running its own physics — physics
+  // uses Math.random() internally, so two independent sims would drift
+  // apart and desync within seconds.
+
+  getHostSnapshot(): CoopSnapshot {
+    const w = this.world;
+    const face = w.scareFace;
+    return {
+      x: this.yawObject.position.x,
+      z: this.yawObject.position.z,
+      yaw: this.yaw,
+      pitch: this.pitch,
+      trayRoll: this.trayRoll,
+      trayPitch: this.trayPitch,
+      bowlX: this.bowlX,
+      bowlZ: this.bowlZ,
+      distance: this.distance,
+      spilled: this.spilled,
+      started: this.started,
+      ended: this.ended,
+      speed: this.lastSpeed,
+      grabbing: this.grabbing,
+      endingKind: this.endingKind,
+      mailboxArmed: this.mailboxArmed,
+      lampKilled: this.lampKilled,
+      blackout: this.blackout,
+      hungerLunging: this.hungerLunging,
+      hungerLunge: this.hungerLunge,
+      glimpseOn: w.glimpse.visible,
+      glimpseSide: this.glimpseSide,
+      bushHands: w.bushHands.visible,
+      wrongHouse: w.wrongHouse.visible,
+      wrongHouseLit: w.wrongHouseLight.intensity,
+      strangerOn: w.stranger.visible,
+      strangerX: w.stranger.position.x,
+      strangerZ: w.stranger.position.z,
+      monsterOn: w.monster.visible,
+      monsterX: w.monster.position.x,
+      monsterZ: w.monster.position.z,
+      monsterGlow: w.monsterGlow.intensity,
+      otherOn: w.otherWalker.visible,
+      otherX: w.otherWalker.position.x,
+      otherZ: w.otherWalker.position.z,
+      faceOn: face.visible,
+      faceX: face.position.x,
+      faceY: face.position.y,
+      faceZ: face.position.z,
+      faceScale: face.scale.x,
+      lineSeq: this.storyLineSeq,
+      lineId: this.storyLineId,
+      scareSeq: this.storyScareSeq,
+      scareKind: this.scareKind,
+      warnSeq: this.storyWarnSeq,
+      warn: this.storyWarnText,
+      fxSeq: this.storyFxSeq,
+      fx: this.storyFx,
+      footSeq: this.storyFootSeq,
+    };
+  }
+
+  /**
+   * Puts the engine into thin-client "remote" mode: local WASD move
+   * input and hurry-fatigue/story triggers are skipped so nothing here
+   * fights with the Host's authoritative simulation, but the tray/bowl
+   * visual physics (roll, slosh, bob) still run locally each frame for
+   * smoothness between snapshots — applyHostSnapshot() then corrects
+   * position/yaw/tray state back onto the Host's truth every time a
+   * network frame arrives, so any local drift never accumulates.
+   */
+  setRemoteDriven(remote: boolean) {
+    this.remoteDriven = remote;
+  }
+
+  setWaiterOwnsTray(owns: boolean) {
+    this.waiterOwnsTray = owns;
+    if (owns) {
+      this.balanceDx = 0;
+      this.balanceDy = 0;
+    }
+  }
+
+  applyHostSnapshot(s: CoopSnapshot) {
+    const justStarted = this.remoteDriven && s.started && !this.started;
+    const grabStarted = this.remoteDriven && s.grabbing && !this.grabbing;
+    const grabEnded = this.remoteDriven && !s.grabbing && this.grabbing;
+    const justSpilled = this.remoteDriven && s.spilled && !this.spilled;
+    const justEnded = this.remoteDriven && s.ended && !this.ended;
+
+    if (grabEnded) this.resetRun();
+
+    this.yawObject.position.x = s.x;
+    this.yawObject.position.z = s.z;
+    this.yaw = s.yaw;
+    this.pitch = s.pitch;
+    this.trayRoll = s.trayRoll;
+    this.trayPitch = s.trayPitch;
+    this.bowlX = s.bowlX;
+    this.bowlZ = s.bowlZ;
+    this.distance = s.distance;
+    this.spilled = s.spilled;
+    this.started = s.started;
+    this.lastSpeed = s.speed;
+    this.applyHostWorld(s);
+    useGame.getState().setSpilled(s.spilled);
+    if (justSpilled && !s.grabbing) this.audio.spill();
+    if (justEnded) this.triggerEnding(s.endingKind);
+    this.ended = s.ended;
+    if (grabStarted) this.startGrab();
+    if (justStarted) this.audio.unlock();
+    this.applyHostStoryCues(s);
+  }
+
+  private applyHostWorld(s: CoopSnapshot) {
+    const w = this.world;
+    this.mailboxArmed = s.mailboxArmed;
+    this.lampKilled = s.lampKilled;
+    this.blackout = s.blackout;
+    this.hungerLunging = s.hungerLunging;
+    this.hungerLunge = s.hungerLunge;
+    this.glimpseSide = s.glimpseSide < 0 ? -1 : 1;
+    w.glimpse.visible = s.glimpseOn;
+    if (s.glimpseOn) this.placeGlimpse();
+    w.bushHands.visible = s.bushHands;
+    w.wrongHouse.visible = s.wrongHouse;
+    w.wrongHouseLight.intensity = s.wrongHouseLit;
+    w.stranger.visible = s.strangerOn;
+    w.stranger.position.x = s.strangerX;
+    w.stranger.position.z = s.strangerZ;
+    w.monster.visible = s.monsterOn;
+    w.monster.position.x = s.monsterX;
+    w.monster.position.z = s.monsterZ;
+    w.monsterGlow.position.set(s.monsterX, 3.1, s.monsterZ + 0.4);
+    w.monsterGlow.intensity = s.monsterGlow;
+    w.otherWalker.visible = s.otherOn;
+    w.otherWalker.position.x = s.otherX;
+    w.otherWalker.position.z = s.otherZ;
+    if (!this.grabbing) {
+      w.scareFace.visible = s.faceOn;
+      w.scareFace.position.set(s.faceX, s.faceY, s.faceZ);
+      w.scareFace.scale.setScalar(s.faceScale);
+    }
+  }
+
+  private applyHostStoryCues(s: CoopSnapshot) {
+    if (s.lineSeq !== this.appliedLineSeq) {
+      this.appliedLineSeq = s.lineSeq;
+      this.audio.stopSpeak();
+      if (s.lineId) {
+        const line = findLine(s.lineId);
+        if (line) this.audio.speak(line.file);
+      }
+    }
+    if (s.scareSeq !== this.appliedScareSeq) {
+      this.appliedScareSeq = s.scareSeq;
+      if (SCARE_KINDS.has(s.scareKind) && !this.grabbing) {
+        this.scare(s.scareKind as Exclude<ScareKind, "none">);
+      }
+    }
+    if (s.warnSeq !== this.appliedWarnSeq) {
+      this.appliedWarnSeq = s.warnSeq;
+      if (s.warn) this.warn(s.warn);
+    }
+    if (s.fxSeq !== this.appliedFxSeq) {
+      const had = this.appliedFxSeq >= 0;
+      this.appliedFxSeq = s.fxSeq;
+      if (had) {
+        if (s.fx === 1) this.audio.whisper();
+        else if (s.fx === 2) this.audio.twig();
+        else if (s.fx === 3) this.audio.heartbeat(true);
+      }
+    }
+    if (s.footSeq !== this.appliedFootSeq) {
+      const had = this.appliedFootSeq >= 0;
+      this.appliedFootSeq = s.footSeq;
+      if (had) this.audio.footstep(s.speed > 4.5);
+    }
   }
 
   advanceDialogue() {
@@ -410,18 +790,41 @@ export class RamenGame {
     this.hold = null;
     this.holdGrace = 0;
     this.audio.stopSpeak();
+    if (!this.remoteDriven) this.publishLine("");
     const p = this.yawObject.position;
     const fx = -Math.sin(this.yaw);
     const fz = -Math.cos(this.yaw);
-    this.grabFrom.set(p.x + fx * 5.4, 1.58, p.z + fz * 5.4);
-    this.grabTo.set(p.x + fx * 0.1, 1.58, p.z + fz * 0.1);
     this.world.monster.visible = false;
     this.world.monsterGlow.intensity = 0;
     const face = this.world.scareFace;
     face.visible = true;
-    face.position.copy(this.grabFrom);
     face.scale.setScalar(2.4);
-    face.lookAt(p.x, 1.58, p.z);
+    // Waiter stands in front of the walker looking at them. Lunge the
+    // face from the walker's chest at the waiter camera so the balancer
+    // actually sees the death beat (the FPS path flies at yawObject,
+    // which is behind the waiter camera).
+    if (this.remoteDriven && this.waiterCamera) {
+      this.placeWaiterCamera();
+      this.waiterGrabCam.copy(this.waiterCamera.position);
+      this.waiterGrabFocus.copy(this.waiterFocus);
+      const lx = this.waiterGrabFocus.x - this.waiterGrabCam.x;
+      const ly = this.waiterGrabFocus.y - this.waiterGrabCam.y;
+      const lz = this.waiterGrabFocus.z - this.waiterGrabCam.z;
+      const len = Math.hypot(lx, ly, lz) || 1;
+      this.grabFrom.set(p.x + fx * 0.22, 1.58, p.z + fz * 0.22);
+      this.grabTo.set(
+        this.waiterGrabCam.x + (lx / len) * 0.38,
+        this.waiterGrabCam.y + (ly / len) * 0.38,
+        this.waiterGrabCam.z + (lz / len) * 0.38,
+      );
+      face.position.copy(this.grabFrom);
+      face.lookAt(this.waiterGrabCam.x, this.waiterGrabCam.y, this.waiterGrabCam.z);
+    } else {
+      this.grabFrom.set(p.x + fx * 5.4, 1.58, p.z + fz * 5.4);
+      this.grabTo.set(p.x + fx * 0.1, 1.58, p.z + fz * 0.1);
+      face.position.copy(this.grabFrom);
+      face.lookAt(p.x, 1.58, p.z);
+    }
     this.world.viewmodel.carry.visible = false;
     this.audio.jumpscare();
     this.trauma = 1;
@@ -560,10 +963,14 @@ export class RamenGame {
       n.rotation.copy(vm.noodleRest[i].rot);
     });
     this.say("you_okay_again");
-    this.tryLock();
+    if (!this.remoteDriven) this.tryLock();
   }
 
   private warn(text: string) {
+    if (!this.remoteDriven) {
+      this.storyWarnSeq += 1;
+      this.storyWarnText = text;
+    }
     useGame.getState().setWarning(text);
     window.setTimeout(() => {
       if (useGame.getState().warning === text) useGame.getState().setWarning(null);
@@ -575,12 +982,28 @@ export class RamenGame {
   }
 
   private say(id: LineId, after?: () => void, event?: HoldKind) {
+    // Dialogue/story lines are driven by distance, which the Waiter's
+    // machine receives from the Host every frame — without this guard
+    // both machines would independently re-trigger the same line's
+    // audio and subtitle UI every playthrough.
+    if (this.remoteDriven) return;
     this.dialogueQ.push({ id, after, event });
     if (!useGame.getState().dialogue) this.showNext();
   }
 
+  private publishLine(id: LineId | "") {
+    this.storyLineSeq += 1;
+    this.storyLineId = id;
+  }
+
+  private hostFx(kind: 1 | 2 | 3) {
+    this.storyFxSeq += 1;
+    this.storyFx = kind;
+  }
+
   private showNext() {
     if (this.dialogueQ.length === 0) {
+      this.publishLine("");
       this.audio.stopSpeak();
       this.after = null;
       this.lineEvent = null;
@@ -589,12 +1012,14 @@ export class RamenGame {
     }
     const entry = this.dialogueQ.shift();
     if (!entry) {
+      this.publishLine("");
       this.audio.stopSpeak();
       this.after = null;
       this.lineEvent = null;
       useGame.getState().setDialogue(null);
       return;
     }
+    this.publishLine(entry.id);
     const line = getLine(entry.id);
     this.after = entry.after ?? null;
     this.lineEvent = entry.event ?? null;
@@ -636,7 +1061,9 @@ export class RamenGame {
     }, 18);
   }
 
-  private scare(kind: typeof this.scareKind) {
+  private scare(kind: ScareKind) {
+    if (kind === "none") return;
+    if (!this.remoteDriven) this.storyScareSeq += 1;
     this.scareKind = kind;
     this.scareT = 1;
     this.trauma = Math.min(1, this.trauma + (this.reducedMotion ? 0.35 : 0.9));
@@ -939,6 +1366,7 @@ export class RamenGame {
         distance: 51,
         run: () => {
           this.say("ramen_dont_spill");
+          this.hostFx(1);
           this.audio.whisper();
         },
       },
@@ -972,6 +1400,7 @@ export class RamenGame {
         distance: 261,
         run: () => {
           this.say("ramen_with_us");
+          this.hostFx(1);
           this.audio.whisper();
         },
       },
@@ -981,6 +1410,7 @@ export class RamenGame {
         distance: 310,
         run: () => {
           this.trayRollV += 1.2;
+          this.hostFx(2);
           this.audio.twig();
           this.warn("COLD PATCH");
         },
@@ -990,6 +1420,7 @@ export class RamenGame {
         distance: 328,
         run: () => {
           this.startGlimpseTrail(-1);
+          this.hostFx(2);
           this.audio.twig();
         },
       },
@@ -1013,6 +1444,7 @@ export class RamenGame {
         distance: 399,
         run: () => {
           this.say("ramen_gaps");
+          this.hostFx(1);
           this.audio.whisper();
         },
       },
@@ -1020,6 +1452,7 @@ export class RamenGame {
         distance: 415,
         run: () => {
           this.startGlimpseTrail(1);
+          this.hostFx(2);
           this.audio.twig();
           this.warn("SOMETHING IN THE TREES");
         },
@@ -1059,6 +1492,7 @@ export class RamenGame {
         run: () => {
           this.trayRollV += 1.8;
           this.trayDamage = Math.min(1, this.trayDamage + 0.06);
+          this.hostFx(2);
           this.audio.twig();
           this.warn("THE TRAY SHUDDERED");
         },
@@ -1076,6 +1510,7 @@ export class RamenGame {
         run: () => {
           this.blackout = 1.35;
           this.lampKilled = true;
+          this.hostFx(3);
           this.audio.heartbeat(true);
         },
       },
@@ -1105,6 +1540,7 @@ export class RamenGame {
         distance: 801,
         run: () => {
           this.trayRollV += 1.6;
+          this.hostFx(2);
           this.audio.twig();
           this.warn("THE ROAD NARROWS");
         },
@@ -1115,6 +1551,7 @@ export class RamenGame {
         distance: 860,
         run: () => {
           this.startGlimpseTrail(-1);
+          this.hostFx(2);
           this.audio.twig();
           this.warn("SOMETHING IS PACING YOU");
         },
@@ -1179,6 +1616,7 @@ export class RamenGame {
     if (this.ended) return;
     this.ended = true;
     this.started = true;
+    this.endingKind = kind;
     if (document.exitPointerLock) document.exitPointerLock();
     const spilled = this.spilled;
     let title = "HOME";
@@ -1207,13 +1645,13 @@ export class RamenGame {
     this.last = now;
     const t = now * 0.001;
 
-    if (this.lookDx || this.lookDy) {
+    if (!this.remoteDriven && (this.lookDx || this.lookDy)) {
       this.yaw -= this.lookDx * 0.0034;
       this.pitch -= this.lookDy * 0.0034;
       this.pitch = Math.max(-1.15, Math.min(0.85, this.pitch));
-      this.lookDx = 0;
-      this.lookDy = 0;
     }
+    this.lookDx = 0;
+    this.lookDy = 0;
 
     this.yawObject.rotation.y = this.yaw;
     this.camera.rotation.x = this.pitch;
@@ -1222,8 +1660,83 @@ export class RamenGame {
     else this.updateIdle(t);
 
     this.applyShake(t);
+    this.syncViewmodelToCarrier(this.world.viewmodel.root, this.camera);
+    this.syncWalkerBody();
+
+    const vm = this.world.viewmodel;
+    const body = this.world.walkerBody.outer;
+    vm.hands.visible = true;
+    vm.grips.visible = false;
+    vm.noodleMound.visible = false;
+    for (const n of vm.noodles) n.visible = true;
+    body.visible = false;
     this.renderer.render(this.scene, this.camera);
+
+    if (this.waiterCamera && this.waiterRenderer) {
+      body.visible = true;
+      vm.hands.visible = false;
+      vm.grips.visible = !this.grabbing;
+      vm.noodleMound.visible = !this.spilled;
+      for (const n of vm.noodles) n.visible = this.spilled;
+      this.syncWaiterCamera();
+      this.waiterRenderer.render(this.scene, this.waiterCamera);
+      vm.hands.visible = true;
+      vm.grips.visible = false;
+      vm.noodleMound.visible = false;
+      for (const n of vm.noodles) n.visible = true;
+      body.visible = false;
+    }
   };
+
+  /**
+   * Kenney CC0 body for the waiter. Arms are collapsed so the skinned mesh
+   * can't stretch into streaks. Tray grip meshes sit on the rims.
+   */
+  private syncWalkerBody() {
+    const body = this.world.walkerBody;
+    const p = this.yawObject.position;
+    const back = 0.14;
+    body.outer.position.set(
+      p.x + Math.sin(this.yaw) * back,
+      0,
+      p.z + Math.cos(this.yaw) * back,
+    );
+    body.outer.rotation.y = this.yaw + Math.PI;
+
+    const wantRun = this.started && !this.ended && !this.spilled && this.lastSpeed > 0.4;
+    const idle = body.idleAction;
+    const run = body.runAction;
+    if (idle && run && wantRun !== this.walkerRunning) {
+      this.walkerRunning = wantRun;
+      if (wantRun) {
+        idle.fadeOut(0.18);
+        run.reset().setEffectiveWeight(1).fadeIn(0.18).play();
+      } else {
+        run.fadeOut(0.18);
+        idle.reset().setEffectiveWeight(1).fadeIn(0.18).play();
+      }
+    }
+    if (run && wantRun) {
+      run.setEffectiveTimeScale(THREE.MathUtils.clamp(this.lastSpeed / 3.35, 0.75, 1.35));
+    }
+
+    body.armL.scale.setScalar(0.001);
+    body.armR.scale.setScalar(0.001);
+  }
+
+  /**
+   * The tray/bowl viewmodel lives in world space (so a second camera can
+   * view it from any angle) but should still read, from the given
+   * carrier camera, exactly as it did when it was camera-attached. This
+   * copies the carrier's world transform onto the viewmodel root each
+   * frame, so all the existing camera-space offsets inside the rig
+   * (carry.position etc.) stay correct.
+   */
+  private syncViewmodelToCarrier(root: THREE.Object3D, carrier: THREE.Camera) {
+    carrier.updateWorldMatrix(true, false);
+    root.position.setFromMatrixPosition(carrier.matrixWorld);
+    root.quaternion.setFromRotationMatrix(carrier.matrixWorld);
+  }
 
   private updateIdle(t: number) {
     this.world.viewmodel.carry.rotation.z = Math.sin(t * 0.7) * 0.02;
@@ -1237,128 +1750,146 @@ export class RamenGame {
 
     let forward = 0;
     let right = 0;
-    if (this.held("KeyW") || this.held("ArrowUp")) forward += 1;
-    if (this.held("KeyS") || this.held("ArrowDown")) forward -= 1;
-    if (this.held("KeyD") || this.held("ArrowRight")) right += 1;
-    if (this.held("KeyA") || this.held("ArrowLeft")) right -= 1;
-    forward += this.joyY;
-    right += this.joyX;
-    const mlen = Math.hypot(forward, right);
-    if (mlen > 1) {
-      forward /= mlen;
-      right /= mlen;
-    }
-    const running = this.held("ShiftLeft") || this.held("ShiftRight");
-    const speed = running ? 5.4 : 3.35;
-    const moving = mlen > 0.08;
-    this.lastSpeed = moving ? speed * Math.min(1, mlen) : 0;
-
-    if (running && moving && !this.spilled) {
-      this.hurryFatigue += dt / 8;
-    } else {
-      this.hurryFatigue -= dt / 5;
-    }
-    this.hurryFatigue = THREE.MathUtils.clamp(this.hurryFatigue, 0, 1);
-
-    const fx = -Math.sin(this.yaw);
-    const fz = -Math.cos(this.yaw);
-    const rx = Math.cos(this.yaw);
-    const rz = -Math.sin(this.yaw);
-    if (moving && !this.spilled) {
-      this.yawObject.position.x += (fx * forward + rx * right) * speed * dt;
-      this.yawObject.position.z += (fz * forward + rz * right) * speed * dt;
-    }
-    this.yawObject.position.x = Math.max(-ROAD_HALF, Math.min(ROAD_HALF, this.yawObject.position.x));
-    this.yawObject.position.z = Math.min(6, this.yawObject.position.z);
-    if (this.yawObject.position.z < HOUSE_Z + 6) this.yawObject.position.z = HOUSE_Z + 6;
-
-    this.distance = Math.max(this.distance, -this.yawObject.position.z);
-    this.maybeSkipHoldTalk(dt);
-    this.steerLookToSpeaker(dt);
-    const yawMod = ((this.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    this.lookingBack = Math.abs(yawMod - Math.PI) < 0.95;
-    this.roadShake = THREE.MathUtils.smoothstep(this.distance / -HOUSE_Z, 0.12, 1);
-
-    const bob = moving ? Math.sin(this.walkCycle) * 0.028 : 0;
-    if (moving) {
-      this.walkCycle += dt * (running ? 11 : 8);
-      if (this.walkCycle - this.lastFoot > Math.PI) {
-        this.lastFoot = this.walkCycle;
-        this.audio.footstep(running);
-      }
-    }
-    this.camera.position.y = bob;
-
+    let running = false;
+    let moving = false;
+    let bob = 0;
     const LIM_X = 0.255;
-    const strain = this.trayStrain();
-    const G = (this.bowlHeavy > 0 ? 12.4 : 9.1) * (1 + strain * 0.42);
-    const MU_S = 0.2 * (1 - strain * 0.55);
-    const MU_K = 0.11 * (1 - strain * 0.5);
     const BOWL_Y = 0.01;
-    const restore = 4.2 * (1 - strain * 0.48) * (1 - this.hurryFatigue * 0.55) * (1 - this.roadShake * 0.4);
-    const damp = 5.5 * (1 - strain * 0.38) * (1 - this.hurryFatigue * 0.5) * (1 - this.roadShake * 0.4);
 
-    this.trayRollV += this.balanceDx * (0.024 * (1 - strain * 0.22));
-    this.balanceDx = 0;
-    this.balanceDy = 0;
-    if (moving) {
-      this.trayRollV += right * (1.25 + strain * 1.4) * dt;
-      const runWobble = running ? THREE.MathUtils.lerp(1.85, 3.1, this.hurryFatigue) : 0.82;
-      this.trayRollV += Math.sin(this.walkCycle) * (runWobble + strain * 1.7) * dt;
-    }
-    if (this.hold) this.trayRollV += (Math.random() - 0.5) * (2.4 + strain * 4) * dt;
-    if (this.scareT > 0) {
-      this.trayRollV += (Math.random() - 0.5) * (8 + strain * 6) * dt;
-    }
-    this.trayRollV += (Math.random() - 0.5) * strain * 5.5 * dt;
-    this.trayRollV += (Math.random() - 0.5) * this.hurryFatigue * 9 * dt;
-    this.trayRollV += (Math.random() - 0.5) * this.roadShake * 8 * dt;
-    this.trayRollV += -this.trayRoll * restore * dt;
-    this.trayRollV *= Math.exp(-damp * dt);
-    this.trayRoll += this.trayRollV * dt;
-    this.trayRoll = THREE.MathUtils.clamp(this.trayRoll, -0.48, 0.48);
-    this.trayPitch = THREE.MathUtils.lerp(
-      this.trayPitch,
-      this.lookingBack ? 0.12 : 0,
-      1 - Math.exp(-8 * dt),
-    );
+    if (!this.remoteDriven) {
+      if (this.held("KeyW") || this.held("ArrowUp")) forward += 1;
+      if (this.held("KeyS") || this.held("ArrowDown")) forward -= 1;
+      if (this.held("KeyD") || this.held("ArrowRight")) right += 1;
+      if (this.held("KeyA") || this.held("ArrowLeft")) right -= 1;
+      forward += this.joyY;
+      right += this.joyX;
+      const mlen = Math.hypot(forward, right);
+      if (mlen > 1) {
+        forward /= mlen;
+        right /= mlen;
+      }
+      running = this.held("ShiftLeft") || this.held("ShiftRight");
+      const speed = running ? 5.4 : 3.35;
+      moving = mlen > 0.08;
+      this.lastSpeed = moving ? speed * Math.min(1, mlen) : 0;
 
-    const ax = G * Math.sin(this.trayRoll);
+      if (running && moving && !this.spilled) {
+        this.hurryFatigue += dt / 8;
+      } else {
+        this.hurryFatigue -= dt / 5;
+      }
+      this.hurryFatigue = THREE.MathUtils.clamp(this.hurryFatigue, 0, 1);
 
-    if (!this.spilled) {
-      if (Math.abs(this.bowlVx) < 0.03 && Math.abs(ax) < MU_S * G * 0.92) {
-        this.bowlVx = 0;
+      const fx = -Math.sin(this.yaw);
+      const fz = -Math.cos(this.yaw);
+      const rx = Math.cos(this.yaw);
+      const rz = -Math.sin(this.yaw);
+      if (moving && !this.spilled) {
+        this.yawObject.position.x += (fx * forward + rx * right) * speed * dt;
+        this.yawObject.position.z += (fz * forward + rz * right) * speed * dt;
+      }
+      this.yawObject.position.x = Math.max(-ROAD_HALF, Math.min(ROAD_HALF, this.yawObject.position.x));
+      this.yawObject.position.z = Math.min(6, this.yawObject.position.z);
+      if (this.yawObject.position.z < HOUSE_Z + 6) this.yawObject.position.z = HOUSE_Z + 6;
+
+      this.distance = Math.max(this.distance, -this.yawObject.position.z);
+      this.maybeSkipHoldTalk(dt);
+      this.steerLookToSpeaker(dt);
+      const yawMod = ((this.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      this.lookingBack = Math.abs(yawMod - Math.PI) < 0.95;
+      this.roadShake = THREE.MathUtils.smoothstep(this.distance / -HOUSE_Z, 0.12, 1);
+
+      bob = moving ? Math.sin(this.walkCycle) * 0.028 : 0;
+      if (moving) {
+        this.walkCycle += dt * (running ? 11 : 8);
+        if (this.walkCycle - this.lastFoot > Math.PI) {
+          this.lastFoot = this.walkCycle;
+          this.storyFootSeq += 1;
+          this.audio.footstep(running);
+        }
+      }
+      this.camera.position.y = bob;
+
+      const strain = this.trayStrain();
+      const G = (this.bowlHeavy > 0 ? 12.4 : 9.1) * (1 + strain * 0.42);
+      const MU_S = 0.2 * (1 - strain * 0.55);
+      const MU_K = 0.11 * (1 - strain * 0.5);
+      const restore = 4.2 * (1 - strain * 0.48) * (1 - this.hurryFatigue * 0.55) * (1 - this.roadShake * 0.4);
+      const damp = 5.5 * (1 - strain * 0.38) * (1 - this.hurryFatigue * 0.5) * (1 - this.roadShake * 0.4);
+      const coop = this.waiterOwnsTray;
+      const walkKick = coop ? 0.32 : 1;
+
+      this.trayRollV += this.balanceDx * ((coop ? 0.058 : 0.024) * (1 - strain * 0.22));
+      this.balanceDx = 0;
+      this.balanceDy = 0;
+      if (moving) {
+        this.trayRollV += right * (1.25 + strain * 1.4) * dt * walkKick;
+        const runWobble = running ? THREE.MathUtils.lerp(1.85, 3.1, this.hurryFatigue) : 0.82;
+        this.trayRollV += Math.sin(this.walkCycle) * (runWobble + strain * 1.7) * dt * walkKick;
+      }
+      if (this.hold) this.trayRollV += (Math.random() - 0.5) * (2.4 + strain * 4) * dt * (coop ? 0.45 : 1);
+      if (this.scareT > 0) {
+        this.trayRollV += (Math.random() - 0.5) * (8 + strain * 6) * dt * (coop ? 0.55 : 1);
+      }
+      this.trayRollV += (Math.random() - 0.5) * strain * 5.5 * dt * (coop ? 0.4 : 1);
+      this.trayRollV += (Math.random() - 0.5) * this.hurryFatigue * 9 * dt * (coop ? 0.4 : 1);
+      this.trayRollV += (Math.random() - 0.5) * this.roadShake * 8 * dt * (coop ? 0.4 : 1);
+      this.trayRollV += -this.trayRoll * restore * dt;
+      this.trayRollV *= Math.exp(-damp * dt);
+      this.trayRoll += this.trayRollV * dt;
+      this.trayRoll = THREE.MathUtils.clamp(this.trayRoll, -0.48, 0.48);
+      this.trayPitch = THREE.MathUtils.lerp(
+        this.trayPitch,
+        this.lookingBack ? 0.12 : 0,
+        1 - Math.exp(-8 * dt),
+      );
+
+      const ax = G * Math.sin(this.trayRoll);
+
+      if (!this.spilled) {
+        if (Math.abs(this.bowlVx) < 0.03 && Math.abs(ax) < MU_S * G * 0.92) {
+          this.bowlVx = 0;
+        } else {
+          this.bowlVx += ax * dt;
+          const sp = Math.abs(this.bowlVx);
+          if (sp > 1e-4) {
+            const f = MU_K * G * dt;
+            this.bowlVx -= Math.sign(this.bowlVx) * Math.min(f, sp);
+          }
+        }
+        this.bowlX += this.bowlVx * dt;
+        this.bowlZ = 0;
+        this.bowlVz = 0;
+
+        if (Math.abs(this.bowlX) > LIM_X) {
+          const out = Math.sign(this.bowlX);
+          if (this.bowlVx * out > 0.08 || Math.abs(ax) > 2.4) this.spill();
+          else {
+            this.bowlX = out * LIM_X;
+            this.bowlVx *= -0.06;
+          }
+        }
+        if (!this.spilled && Math.abs(this.bowlX) > LIM_X * 0.86) {
+          this.warn("THE BOWL IS AT THE RIM");
+        }
       } else {
         this.bowlVx += ax * dt;
-        const sp = Math.abs(this.bowlVx);
-        if (sp > 1e-4) {
-          const f = MU_K * G * dt;
-          this.bowlVx -= Math.sign(this.bowlVx) * Math.min(f, sp);
-        }
-      }
-      this.bowlX += this.bowlVx * dt;
-      this.bowlZ = 0;
-      this.bowlVz = 0;
-
-      if (Math.abs(this.bowlX) > LIM_X) {
-        const out = Math.sign(this.bowlX);
-        if (this.bowlVx * out > 0.08 || Math.abs(ax) > 2.4) this.spill();
-        else {
-          this.bowlX = out * LIM_X;
-          this.bowlVx *= -0.06;
-        }
-      }
-      if (!this.spilled && Math.abs(this.bowlX) > LIM_X * 0.86) {
-        this.warn("THE BOWL IS AT THE RIM");
+        this.bowlX += this.bowlVx * dt;
+        this.bowlZ = 0;
+        this.bowlVz = 0;
+        this.tipT += dt;
       }
     } else {
-      this.bowlVx += ax * dt;
-      this.bowlX += this.bowlVx * dt;
-      this.bowlZ = 0;
-      this.bowlVz = 0;
-      this.tipT += dt;
+      const yawMod = ((this.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      this.lookingBack = Math.abs(yawMod - Math.PI) < 0.95;
+      this.roadShake = THREE.MathUtils.smoothstep(this.distance / -HOUSE_Z, 0.12, 1);
+      this.balanceDx = 0;
+      this.balanceDy = 0;
+      if (this.spilled) this.tipT += dt;
     }
 
+    const ax =
+      (this.bowlHeavy > 0 ? 12.4 : 9.1) * (1 + this.trayStrain() * 0.42) * Math.sin(this.trayRoll);
     this.sloshVx += (ax * 0.12 - this.sloshX * 18) * dt;
     this.sloshVx *= Math.exp(-6 * dt);
     this.sloshX += this.sloshVx * dt;
@@ -1416,7 +1947,7 @@ export class RamenGame {
         this.audio.otherStep(this.glimpseSide);
         if (Math.random() < 0.38) this.audio.otherBreath(this.glimpseSide);
       }
-    } else if (this.roadShake > 0.28 && moving) {
+    } else if (this.roadShake > 0.28 && (moving || (this.remoteDriven && this.lastSpeed > 0.4))) {
       if (this.otherStepT >= this.otherStepGap) {
         this.otherStepT = 0;
         this.otherStepGap = 2.5 + Math.random() * 1.5;
@@ -1442,7 +1973,7 @@ export class RamenGame {
         this.yawObject.position.z,
       );
     }
-    if (this.crossing) {
+    if (this.crossing && !this.remoteDriven) {
       this.crossingT += dt;
       const u = Math.min(1, this.crossingT / 2.6);
       this.world.stranger.visible = true;
@@ -1491,61 +2022,76 @@ export class RamenGame {
       const u = Math.min(1, this.grabT / 0.28);
       const e = u * u * u * u * u;
       const p = this.yawObject.position;
-      const fx = -Math.sin(this.yaw);
-      const fz = -Math.cos(this.yaw);
-      this.grabTo.set(p.x + fx * 0.08, 1.58, p.z + fz * 0.08);
       const face = this.world.scareFace;
       face.visible = true;
-      face.position.lerpVectors(this.grabFrom, this.grabTo, e);
-      face.lookAt(p.x, 1.58, p.z);
-      face.scale.setScalar(2.4 + e * 26);
+      if (this.remoteDriven && this.waiterCamera) {
+        face.position.lerpVectors(this.grabFrom, this.grabTo, e);
+        face.lookAt(this.waiterGrabCam.x, this.waiterGrabCam.y, this.waiterGrabCam.z);
+      } else {
+        const fx = -Math.sin(this.yaw);
+        const fz = -Math.cos(this.yaw);
+        this.grabTo.set(p.x + fx * 0.08, 1.58, p.z + fz * 0.08);
+        face.position.lerpVectors(this.grabFrom, this.grabTo, e);
+        face.lookAt(p.x, 1.58, p.z);
 
-      const dx = face.position.x - p.x;
-      const dz = face.position.z - p.z;
-      const wantYaw = Math.atan2(-dx, -dz);
-      let dyaw = wantYaw - this.yaw;
-      while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-      while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-      this.yaw += dyaw;
-      this.pitch = 0.04;
-      this.yawObject.rotation.y = this.yaw;
-      this.camera.rotation.x = this.pitch;
+        const dx = face.position.x - p.x;
+        const dz = face.position.z - p.z;
+        const wantYaw = Math.atan2(-dx, -dz);
+        let dyaw = wantYaw - this.yaw;
+        while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+        while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+        this.yaw += dyaw;
+        this.pitch = 0.04;
+        this.yawObject.rotation.y = this.yaw;
+        this.camera.rotation.x = this.pitch;
+      }
+      face.scale.setScalar(2.4 + e * 26);
       this.world.viewmodel.carry.visible = false;
       this.trauma = 1;
 
       const white = u > 0.72 ? Math.min(1, (u - 0.72) / 0.18) : 0;
       useGame.getState().setWhiteout(white);
-      if (this.grabT > 0.36) this.resetRun();
+      if (this.grabT > 0.36 && !this.remoteDriven) this.resetRun();
     } else if (this.hungerLunging) {
-      this.hungerLunge += dt / 0.55;
-      const u = Math.min(1, this.hungerLunge);
-      const p = this.yawObject.position;
-      this.world.monster.position.set(
-        THREE.MathUtils.lerp(this.hungerFrom.x, p.x, u),
-        0,
-        THREE.MathUtils.lerp(this.hungerFrom.z, p.z - 1.5, u),
-      );
-      this.world.monster.lookAt(p.x, 0, p.z);
-      this.world.monsterArms[0].rotation.x = -u * 1.1;
-      this.world.monsterArms[1].rotation.x = -u * 1.1;
-      this.world.monsterGlow.position.copy(this.world.monster.position);
-      this.world.monsterGlow.position.y = 2.9;
-      this.world.monsterGlow.intensity = 2.4 + Math.sin(t * 20) * 1.2;
-      if (u >= 1) {
-        this.hungerLunging = false;
-        this.world.monster.visible = false;
-        this.world.monsterGlow.intensity = 0;
-        this.say("hunger_pork");
-        this.say("ramen_wanted_me");
+      if (this.remoteDriven) {
+        const u = Math.min(1, this.hungerLunge);
+        const p = this.yawObject.position;
+        this.world.monster.lookAt(p.x, 0, p.z);
+        this.world.monsterArms[0].rotation.x = -u * 1.1;
+        this.world.monsterArms[1].rotation.x = -u * 1.1;
+      } else {
+        this.hungerLunge += dt / 0.55;
+        const u = Math.min(1, this.hungerLunge);
+        const p = this.yawObject.position;
+        this.world.monster.position.set(
+          THREE.MathUtils.lerp(this.hungerFrom.x, p.x, u),
+          0,
+          THREE.MathUtils.lerp(this.hungerFrom.z, p.z - 1.5, u),
+        );
+        this.world.monster.lookAt(p.x, 0, p.z);
+        this.world.monsterArms[0].rotation.x = -u * 1.1;
+        this.world.monsterArms[1].rotation.x = -u * 1.1;
+        this.world.monsterGlow.position.copy(this.world.monster.position);
+        this.world.monsterGlow.position.y = 2.9;
+        this.world.monsterGlow.intensity = 2.4 + Math.sin(t * 20) * 1.2;
+        if (u >= 1) {
+          this.hungerLunging = false;
+          this.world.monster.visible = false;
+          this.world.monsterGlow.intensity = 0;
+          this.say("hunger_pork");
+          this.say("ramen_wanted_me");
+        }
       }
     } else if (this.world.monster.visible) {
       this.world.monster.rotation.y = Math.sin(t * 0.7) * 0.1;
-      this.world.monsterGlow.intensity = 1.6 + Math.sin(t * 8) * 0.7;
+      if (!this.remoteDriven) {
+        this.world.monsterGlow.intensity = 1.6 + Math.sin(t * 8) * 0.7;
+      }
     }
 
     if (this.scareT > 0) {
       this.scareT -= dt;
-      if (this.scareKind === "face" || this.scareKind === "watcher") {
+      if (!this.remoteDriven && (this.scareKind === "face" || this.scareKind === "watcher")) {
         this.world.scareFace.lookAt(
           this.yawObject.position.x,
           1.55,
@@ -1553,18 +2099,26 @@ export class RamenGame {
         );
       }
       if (this.scareT <= 0) {
-        if (!this.grabbing) this.world.scareFace.visible = false;
-        if (this.scareKind === "face") this.world.stranger.visible = false;
-        this.scareKind = "none";
+        if (!this.remoteDriven) {
+          if (!this.grabbing) this.world.scareFace.visible = false;
+          if (this.scareKind === "face") this.world.stranger.visible = false;
+          this.scareKind = "none";
+        }
         if (useGame.getState().hitKind === "scare") useGame.getState().pulseHit("none");
       }
     }
 
-    if (this.lookingBack && this.distance > roadAt(338) && this.distance < roadAt(380) && !this.seenBack) {
+    if (
+      !this.remoteDriven &&
+      this.lookingBack &&
+      this.distance > roadAt(338) &&
+      this.distance < roadAt(380) &&
+      !this.seenBack
+    ) {
       this.backScare();
     }
 
-    this.blackout = Math.max(0, this.blackout - dt);
+    if (!this.remoteDriven) this.blackout = Math.max(0, this.blackout - dt);
     const flick =
       1 +
       Math.sin(t * 13) * 0.04 +
@@ -1593,7 +2147,7 @@ export class RamenGame {
     }
     fPos.needsUpdate = true;
 
-    if (this.resetT > 0 && !this.grabbing) {
+    if (!this.remoteDriven && this.resetT > 0 && !this.grabbing) {
       this.resetT += dt;
       if (this.resetT > 0.1) this.startGrab();
     }
@@ -1604,13 +2158,14 @@ export class RamenGame {
       useGame.getState().setHud(Math.floor(this.distance), Math.round(stability));
     }
 
-    this.updateEncounters();
-
-    if (!this.spilled) {
-      for (const ev of this.events) {
-        if (!ev.triggered && this.distance >= ev.distance) {
-          ev.triggered = true;
-          ev.run();
+    if (!this.remoteDriven) {
+      this.updateEncounters();
+      if (!this.spilled) {
+        for (const ev of this.events) {
+          if (!ev.triggered && this.distance >= ev.distance) {
+            ev.triggered = true;
+            ev.run();
+          }
         }
       }
     }
@@ -1710,6 +2265,7 @@ export class RamenGame {
     disposeWorld(this.world);
     disposeArt(this.art);
     this.renderer.dispose();
+    this.disableWaiterView();
     delete window.__controlsTest;
   }
 }

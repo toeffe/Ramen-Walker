@@ -10,3 +10,5 @@ Thumbs.db
 .env
 .env.*
 src/soundassets/tts.csv
+COOP_README.md
+ramen-walker-coop.patch
