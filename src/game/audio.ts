@@ -36,9 +36,13 @@ export class GameAudio {
   private unlocked = false;
   private lastStep = 0;
   private lastBeat = 0;
+  private lastOther = 0;
   private voice: HTMLAudioElement | null = null;
   private voiceDuck = false;
   private tension = 0;
+  private breathGain: GainNode | null = null;
+  private breathFilter: BiquadFilterNode | null = null;
+  private breathSrc: AudioBufferSourceNode | null = null;
 
   unlock() {
     if (this.unlocked) {
@@ -58,6 +62,7 @@ export class GameAudio {
     this.master = master;
     this.unlocked = true;
     this.startDrone();
+    this.startBreath();
     void this.startAmbient();
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
@@ -65,6 +70,46 @@ export class GameAudio {
         this.ensureAmbientPlaying();
       }
     });
+  }
+
+  private startBreath() {
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master || this.breathGain) return;
+    const dur = 2;
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 520;
+    filter.Q.value = 0.85;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(master);
+    src.start();
+    this.breathSrc = src;
+    this.breathFilter = filter;
+    this.breathGain = g;
+  }
+
+  setBreath(intensity: number) {
+    const ctx = this.ctx;
+    const g = this.breathGain;
+    const filter = this.breathFilter;
+    if (!ctx || !g) return;
+    const now = ctx.currentTime;
+    const duck = this.voiceDuck ? 0.28 : 1;
+    const amt = Math.max(0, Math.min(1, intensity));
+    const rate = 0.22 + amt * 0.38;
+    const pulse = 0.32 + 0.68 * (0.5 + 0.5 * Math.sin(now * Math.PI * 2 * rate));
+    g.gain.setTargetAtTime(amt * 0.1 * pulse * duck, now, 0.06);
+    if (filter) filter.frequency.setTargetAtTime(420 + amt * 280, now, 0.12);
   }
 
   private startDrone() {
@@ -239,6 +284,15 @@ export class GameAudio {
       this.ambientEl = null;
     }
     this.ambientGain = null;
+    try {
+      this.breathSrc?.stop();
+    } catch {
+      /* already stopped */
+    }
+    this.breathSrc?.disconnect();
+    this.breathSrc = null;
+    this.breathGain = null;
+    this.breathFilter = null;
     void this.ctx?.close();
     this.ctx = null;
     this.master = null;
@@ -477,5 +531,85 @@ export class GameAudio {
     g.connect(master);
     osc.start(now);
     osc.stop(now + 0.11);
+  }
+
+  otherStep(pan = 0) {
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master) return;
+    const now = ctx.currentTime;
+    if (now - this.lastOther < 0.22) return;
+    this.lastOther = now;
+    const sr = ctx.sampleRate;
+    const gritDur = 0.16;
+    const grit = ctx.createBuffer(1, Math.floor(sr * gritDur), sr);
+    const gData = grit.getChannelData(0);
+    for (let i = 0; i < gData.length; i++) {
+      const t = i / gData.length;
+      gData[i] = (Math.random() * 2 - 1) * Math.exp(-t * 12) * (1 - t);
+    }
+    const gritSrc = ctx.createBufferSource();
+    gritSrc.buffer = grit;
+    gritSrc.playbackRate.value = 0.72 + Math.random() * 0.12;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 780 + Math.random() * 180;
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan));
+    const g = ctx.createGain();
+    g.gain.value = 0.11;
+    gritSrc.connect(lp);
+    lp.connect(g);
+    g.connect(panner);
+    panner.connect(master);
+
+    const osc = ctx.createOscillator();
+    const oscG = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(68 + Math.random() * 18, now);
+    osc.frequency.exponentialRampToValueAtTime(32, now + 0.09);
+    oscG.gain.setValueAtTime(0.0001, now);
+    oscG.gain.exponentialRampToValueAtTime(0.1, now + 0.01);
+    oscG.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    osc.connect(oscG);
+    oscG.connect(panner);
+
+    gritSrc.start(now);
+    osc.start(now);
+    osc.stop(now + 0.13);
+    gritSrc.onended = () => {
+      gritSrc.disconnect();
+      lp.disconnect();
+      g.disconnect();
+      panner.disconnect();
+    };
+  }
+
+  otherBreath(pan = 0) {
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master) return;
+    const dur = 0.55;
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const env = Math.sin((i / data.length) * Math.PI);
+      data[i] = (Math.random() * 2 - 1) * env;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 380;
+    filter.Q.value = 0.7;
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan));
+    const g = ctx.createGain();
+    g.gain.value = 0.08;
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(panner);
+    panner.connect(master);
+    src.start();
   }
 }

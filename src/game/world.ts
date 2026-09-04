@@ -8,12 +8,40 @@ import { CHARACTER_SKIN, type CharacterAssets, type CharacterKey } from "@/game/
  * ~1.8m adult in this game's meter-scale world. */
 const BASE_CHAR_SCALE = 1.8 / 3.7;
 
-export const HOUSE_Z = -1200;
-export const ROAD_HALF = 3.55;
+/** Map original 1200m story meters onto the stretched road. Later segments
+ * grow more because those holds are longer — walking time matches talk time. */
+export function roadAt(oldMeters: number): number {
+  const segs: readonly [from: number, to: number, scale: number][] = [
+    [0, 90, 1],
+    [90, 220, 1.25],
+    [220, 640, 1.22],
+    [640, 900, 1.28],
+    [900, 1100, 1.45],
+    [1100, 1200, 1.55],
+  ];
+  let out = 0;
+  let remaining = Math.max(0, oldMeters);
+  for (const [from, to, scale] of segs) {
+    const span = to - from;
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, span);
+    out += take * scale;
+    remaining -= take;
+  }
+  if (remaining > 0) out += remaining;
+  return out;
+}
 
-// Where the false destination sits between The Other and the second Watcher.
-export const WRONG_HOUSE_Z = -1085;
+export const HOUSE_Z = -roadAt(1200);
+export const ROAD_HALF = 3.55;
+export const SENTINEL_Z = -roadAt(90);
+export const WATCHER_Z = -roadAt(220);
+export const HUNGER_Z = -roadAt(640);
+export const OTHER_Z = -roadAt(900);
+export const WATCHER2_Z = -roadAt(1100);
+export const WRONG_HOUSE_Z = -roadAt(1085);
 export const WRONG_HOUSE_LIGHT_INTENSITY = 2.4;
+const ROAD_END = HOUSE_Z - 50;
 
 type Rng = () => number;
 
@@ -137,32 +165,48 @@ function makeShingleTexture() {
 }
 
 /** Small roadside marker with a scratched, half-legible name scored into it. */
-function makeNamePostTexture(seed: number) {
+const POST_NAMES = ["HELEN", "MARK", "JUNE", "ARI", "TOMAS", "ELLIE", "RIN", "PAUL", "NADIA"] as const;
+
+function makeNamePostTexture(seed: number, name: string) {
   const rng = mulberry32(seed);
-  return makeSilhouette((ctx, w, h) => {
+  const tex = makeSilhouette((ctx, w, h) => {
     ctx.fillStyle = "#3a2e22";
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    for (let i = 0; i < 6; i++) {
-      ctx.fillRect(0, (i / 6) * h, w, 1.5);
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    for (let i = 0; i < 8; i++) {
+      ctx.fillRect(0, (i / 8) * h, w, 2);
     }
-    ctx.strokeStyle = "rgba(214,206,190,0.65)";
-    ctx.lineWidth = 2;
+    for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = `rgba(0,0,0,${0.08 + rng() * 0.18})`;
+      ctx.fillRect(rng() * w, rng() * h, 1 + rng() * 3, 1);
+    }
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `bold ${Math.floor(h * 0.46)}px "Times New Roman", "Georgia", serif`;
+    ctx.fillStyle = "rgba(148, 36, 28, 0.38)";
+    ctx.fillText(name, w * 0.5 + 3, h * 0.52 + 4);
+    ctx.lineJoin = "round";
+    ctx.miterLimit = 2;
+    ctx.strokeStyle = "rgba(28, 18, 12, 0.85)";
+    ctx.lineWidth = 8;
+    ctx.strokeText(name, w * 0.5, h * 0.5);
+    ctx.strokeStyle = "rgba(214, 206, 190, 0.92)";
+    ctx.lineWidth = 3.5;
+    ctx.strokeText(name, w * 0.5, h * 0.5);
+    ctx.fillStyle = "rgba(232, 220, 198, 0.88)";
+    ctx.fillText(name, w * 0.5, h * 0.5);
+    ctx.strokeStyle = "rgba(214,206,190,0.35)";
+    ctx.lineWidth = 1.5;
     ctx.lineCap = "round";
-    const lines = 2 + Math.floor(rng() * 2);
-    for (let l = 0; l < lines; l++) {
-      const y = h * (0.32 + l * 0.22) + rand(rng, -6, 6);
-      let x = w * 0.12;
+    for (let i = 0; i < 5; i++) {
       ctx.beginPath();
-      ctx.moveTo(x, y);
-      const strokes = 4 + Math.floor(rng() * 5);
-      for (let s = 0; s < strokes; s++) {
-        x += w * rand(rng, 0.08, 0.16);
-        ctx.lineTo(x, y + rand(rng, -8, 8));
-      }
+      ctx.moveTo(rand(rng, 8, w - 8), rand(rng, 8, h - 8));
+      ctx.lineTo(rand(rng, 8, w - 8), rand(rng, 8, h - 8));
       ctx.stroke();
     }
-  }, 128, 96);
+  }, 512, 256);
+  tex.anisotropy = 8;
+  return tex;
 }
 
 function stdMat(
@@ -248,10 +292,18 @@ export type CharacterRig = {
   mixer: THREE.AnimationMixer;
 };
 
+const neutralizeScale = new THREE.Vector3();
+
 function neutralize(parent: THREE.Object3D) {
   const g = new THREE.Group();
-  g.scale.set(1 / (parent.scale.x || 1), 1 / (parent.scale.y || 1), 1 / (parent.scale.z || 1));
   parent.add(g);
+  parent.updateWorldMatrix(true, false);
+  parent.getWorldScale(neutralizeScale);
+  g.scale.set(
+    1 / Math.max(1e-6, neutralizeScale.x),
+    1 / Math.max(1e-6, neutralizeScale.y),
+    1 / Math.max(1e-6, neutralizeScale.z),
+  );
   return g;
 }
 
@@ -603,21 +655,23 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     new THREE.MeshStandardMaterial({ color: 0x564636, roughness: 0.78, flatShading: true }),
   );
 
-  const ground = new THREE.Mesh(track(new THREE.PlaneGeometry(280, 1900)), groundMat);
+  const groundLen = -HOUSE_Z + 500;
+  const ground = new THREE.Mesh(track(new THREE.PlaneGeometry(280, groundLen)), groundMat);
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0, -0.04, -825);
+  ground.position.set(0, -0.04, HOUSE_Z / 2 - 40);
   scene.add(ground);
 
-  const ROAD_Z = -580;
-  const road = new THREE.Mesh(track(new THREE.PlaneGeometry(8.4, 1500)), roadMat);
+  const roadLen = -HOUSE_Z + 120;
+  const ROAD_Z = HOUSE_Z / 2 - 10;
+  const road = new THREE.Mesh(track(new THREE.PlaneGeometry(8.4, roadLen)), roadMat);
   road.rotation.x = -Math.PI / 2;
   road.position.set(0, 0, ROAD_Z);
   scene.add(road);
-  const stripe = new THREE.Mesh(track(new THREE.PlaneGeometry(0.11, 1460)), trackMat);
+  const stripe = new THREE.Mesh(track(new THREE.PlaneGeometry(0.11, roadLen - 40)), trackMat);
   stripe.rotation.x = -Math.PI / 2;
   stripe.position.set(0, 0.012, ROAD_Z);
   scene.add(stripe);
-  const shoulderL = new THREE.Mesh(track(new THREE.PlaneGeometry(2.2, 1500)), dirtMat);
+  const shoulderL = new THREE.Mesh(track(new THREE.PlaneGeometry(2.2, roadLen)), dirtMat);
   shoulderL.rotation.x = -Math.PI / 2;
   shoulderL.position.set(-5.1, 0.006, ROAD_Z);
   scene.add(shoulderL);
@@ -628,16 +682,16 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   // Railings — posts + two rails, both sides. Extended to the new road length.
   const postGeo = track(new THREE.BoxGeometry(0.11, 1.15, 0.11));
   const railGeo = track(new THREE.BoxGeometry(0.07, 0.055, 2.8));
-  const postCount = 950;
+  const postCount = 1250;
   const posts = new THREE.InstancedMesh(postGeo, railDark, postCount);
-  const railCount = 1900;
+  const railCount = 2500;
   const rails = new THREE.InstancedMesh(railGeo, railMat, railCount);
   const dummy = new THREE.Object3D();
   let pi = 0;
   let ri = 0;
   for (const side of [-1, 1]) {
     const x = side * 4.25;
-    for (let z = 52; z > -1250 && pi < postCount; z -= 2.8) {
+    for (let z = 52; z > ROAD_END && pi < postCount; z -= 2.8) {
       dummy.position.set(x, 0.52, z);
       dummy.rotation.set(0, 0, 0);
       dummy.scale.set(1, 1, 1);
@@ -700,7 +754,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     d.position.set(
       side * (5.05 + row * 1.28 + rand(rng, -0.3, 0.45)),
       0,
-      14 - Math.floor(i / 2) * 1.55 + rand(rng, -0.65, 0.65),
+      14 - Math.floor(i / 2) * 1.95 + rand(rng, -0.65, 0.65),
     );
     const h = rand(rng, 8.2, 15.5) * (row > 4 ? 1.22 : row < 2 ? 0.92 : 1);
     d.scale.set(h * 0.52, h, 1);
@@ -709,7 +763,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
 
   scatterCards(fernMat, 2550, (d) => {
     const side = rng() > 0.5 ? 1 : -1;
-    d.position.set(side * rand(rng, 4.38, 8.8), 0, rand(rng, 46, -1250));
+    d.position.set(side * rand(rng, 4.38, 8.8), 0, rand(rng, 46, ROAD_END));
     const h = rand(rng, 0.65, 1.75);
     d.scale.set(h * 1.05, h, 1);
     d.rotation.y = rng() * Math.PI;
@@ -717,7 +771,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
 
   scatterCards(bushMat, 1050, (d) => {
     const side = rng() > 0.5 ? 1 : -1;
-    d.position.set(side * rand(rng, 4.7, 10.5), 0, rand(rng, 44, -1250));
+    d.position.set(side * rand(rng, 4.7, 10.5), 0, rand(rng, 44, ROAD_END));
     const h = rand(rng, 1.15, 2.55);
     d.scale.set(h * 1.4, h, 1);
     d.rotation.y = rng() * Math.PI;
@@ -725,7 +779,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
 
   scatterCards(grassMat, 3500, (d) => {
     const side = rng() > 0.5 ? 1 : -1;
-    d.position.set(side * rand(rng, 4.32, 11.5), 0, rand(rng, 46, -1250));
+    d.position.set(side * rand(rng, 4.32, 11.5), 0, rand(rng, 46, ROAD_END));
     const h = rand(rng, 0.45, 1.25);
     d.scale.set(h * 1.25, h, 1);
     d.rotation.y = rng() * Math.PI;
@@ -957,7 +1011,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   const logs = new THREE.InstancedMesh(logGeo, barkMat, 120);
   for (let i = 0; i < 120; i++) {
     const side = i % 2 === 0 ? -1 : 1;
-    dummy.position.set(side * rand(rng, 5.4, 8.8), 0.14, rand(rng, 42, -1250));
+    dummy.position.set(side * rand(rng, 5.4, 8.8), 0.14, rand(rng, 42, ROAD_END));
     dummy.rotation.set(rand(rng, 0.1, 0.4), rng() * Math.PI, Math.PI / 2 + rand(rng, -0.2, 0.2));
     dummy.scale.set(rand(rng, 0.7, 1.3), rand(rng, 0.8, 1.4), rand(rng, 0.7, 1.2));
     dummy.updateMatrix();
@@ -983,7 +1037,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   const rocks = new THREE.InstancedMesh(rockGeo, rockMat, 230);
   for (let i = 0; i < 230; i++) {
     const side = rng() > 0.5 ? 1 : -1;
-    dummy.position.set(side * rand(rng, 4.7, 10), 0.12, rand(rng, 38, -1250));
+    dummy.position.set(side * rand(rng, 4.7, 10), 0.12, rand(rng, 38, ROAD_END));
     dummy.rotation.set(rng() * 0.6, rng() * Math.PI, rng() * 0.4);
     const s = rand(rng, 0.5, 1.6);
     dummy.scale.set(s, s * rand(rng, 0.45, 0.8), s);
@@ -1036,7 +1090,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     }),
   );
   const fogGeo = track(new THREE.PlaneGeometry(14, 3.4, 1, 1));
-  for (let i = 0; i < 175; i++) {
+  for (let i = 0; i < 230; i++) {
     const z = 5 - i * 7.2;
     const sheet = new THREE.Mesh(fogGeo, fogMat);
     sheet.position.set((i % 2 === 0 ? -1 : 1) * 1.35, 0.85 + (i % 3) * 0.22, z);
@@ -1097,7 +1151,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   const hoodGeo = track(new THREE.ConeGeometry(0.22, 0.16, 6));
   const lampLights: LampLight[] = [];
   let lampDying: THREE.PointLight | null = null;
-  const LAMP_COUNT = 45;
+  const LAMP_COUNT = 56;
   for (let i = 0; i < LAMP_COUNT; i++) {
     const z = -8 - i * 29;
     const side = i % 2 === 0 ? -1 : 1;
@@ -1209,14 +1263,12 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   );
   const mailboxEyeAnchor = neutralize(sentinelRig.head);
   const mailboxEye = new THREE.Group();
-  // Offsets are in the head bone's own (large) native rig units — this rig's
-  // head is a big chibi-style head, not the old GLB's small cube.
-  mailboxEye.position.set(0, 0.42, 0.42);
-  const sentryEyeGeo = track(new THREE.SphereGeometry(0.06, 10, 8));
+  mailboxEye.position.set(0, 0.11, 0.08);
+  const sentryEyeGeo = track(new THREE.SphereGeometry(0.028, 10, 8));
   const sentryEyeL = new THREE.Mesh(sentryEyeGeo, mailboxEyeMat);
-  sentryEyeL.position.set(-0.13, 0, 0);
+  sentryEyeL.position.set(-0.035, 0, 0);
   const sentryEyeR = sentryEyeL.clone();
-  sentryEyeR.position.x = 0.13;
+  sentryEyeR.position.x = 0.035;
   mailboxEye.add(sentryEyeL, sentryEyeR);
   mailboxEyeAnchor.add(mailboxEye);
   const lanternPole = stdMat(mat, 0x1c1a16, { roughness: 0.45, metalness: 0.35 });
@@ -1235,14 +1287,13 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   handle.position.y = 0.07;
   handle.rotation.x = Math.PI / 2;
   lantern.add(cage, pane, handle);
-  // Held at the hand bone (stable, near-identity bind rotation), not the
-  // upper arm — small nudge down/forward from the palm.
-  lantern.position.set(0, -0.18, 0.14);
-  sentinelRig.handR.add(lantern);
+  const handAnchor = neutralize(sentinelRig.handR);
+  lantern.position.set(0, -0.04, 0.05);
+  handAnchor.add(lantern);
   const lanternLight = new THREE.PointLight(0xffc070, 1.8, 4.5, 1.8);
   lanternLight.position.copy(lantern.position);
-  sentinelRig.handR.add(lanternLight);
-  mailbox.position.set(-3.15, 0, -90);
+  handAnchor.add(lanternLight);
+  mailbox.position.set(-3.15, 0, SENTINEL_Z);
   mailbox.rotation.y = Math.PI / 2;
   scene.add(mailbox);
 
@@ -1251,7 +1302,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   mixers.push(watcherRig.mixer);
   const stranger = watcherRig.outer;
   const strangerHead = watcherRig.head;
-  stranger.position.set(1.4, 0, -220);
+  stranger.position.set(1.4, 0, WATCHER_Z);
   stranger.visible = false;
   scene.add(stranger);
 
@@ -1279,23 +1330,23 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     }),
   );
   const hungerEyeAnchor = neutralize(hungerRig.head);
-  const hungerEyeGeo = track(new THREE.SphereGeometry(0.1, 10, 8));
+  const hungerEyeGeo = track(new THREE.SphereGeometry(0.045, 10, 8));
   const e1 = new THREE.Mesh(hungerEyeGeo, eyeGlowM);
-  e1.position.set(-0.13, 0.25, 0.38);
+  e1.position.set(-0.04, 0.08, 0.1);
   const e2 = e1.clone();
-  e2.position.x = 0.13;
+  e2.position.x = 0.04;
   const e3 = e1.clone();
-  e3.position.set(0, 0.5, 0.33);
+  e3.position.set(0, 0.14, 0.09);
   e3.scale.setScalar(0.7);
   hungerEyeAnchor.add(e1, e2, e3);
-  const jaw = new THREE.Mesh(track(new THREE.BoxGeometry(0.3, 0.075, 0.2)), stdMat(mat, 0x1a1210, { roughness: 0.7 }));
-  jaw.position.set(0, 0.0, 0.38);
+  const jaw = new THREE.Mesh(track(new THREE.BoxGeometry(0.16, 0.04, 0.1)), stdMat(mat, 0x1a1210, { roughness: 0.7 }));
+  jaw.position.set(0, -0.04, 0.1);
   hungerEyeAnchor.add(jaw);
-  monster.position.set(0, 0, -640);
+  monster.position.set(0, 0, HUNGER_Z);
   monster.visible = false;
   scene.add(monster);
   const monsterGlow = new THREE.PointLight(0x9e2a22, 0, 10);
-  monsterGlow.position.set(0, 3.1, -638);
+  monsterGlow.position.set(0, 3.1, HUNGER_Z + 2);
   scene.add(monsterGlow);
 
   // Wrong house first, since the real house reuses the same builder just
@@ -1324,22 +1375,25 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   const wrongHouse = wrongBuilt.group;
   const wrongHouseLight = wrongBuilt.porchLight;
 
-  // Name posts — a fence stretch with scratched names, ~110m-165m.
+  // Name posts — a fence stretch with carved names, after the Sentinel.
   const namePosts = new THREE.Group();
   const postWoodM = stdMat(mat, 0x2a2018, { roughness: 0.85 });
   for (let i = 0; i < 9; i++) {
     const side = i % 2 === 0 ? -1 : 1;
-    const z = -112 - i * 6.4;
-    const post = new THREE.Mesh(track(new THREE.BoxGeometry(0.1, 0.9, 0.1)), postWoodM);
-    post.position.set(side * 4.35, 0.45, z);
+    const z = -roadAt(112 + i * 6.4);
+    const post = new THREE.Mesh(track(new THREE.BoxGeometry(0.16, 1.7, 0.12)), postWoodM);
+    post.position.set(side * 3.95, 0.85, z);
     namePosts.add(post);
-    const plaqueTex = makeNamePostTexture(0x1000 + i);
+    const plaqueTex = makeNamePostTexture(0x1000 + i, POST_NAMES[i]);
     const plaqueM = mat(
       new THREE.MeshStandardMaterial({ map: plaqueTex, roughness: 0.85, side: THREE.DoubleSide }),
     );
-    const plaque = new THREE.Mesh(track(new THREE.PlaneGeometry(0.34, 0.24)), plaqueM);
-    plaque.position.set(side * (4.35 - side * 0.08), 0.62, z);
-    plaque.rotation.y = side * 0.5;
+    const plaque = new THREE.Mesh(track(new THREE.PlaneGeometry(0.72, 0.42)), plaqueM);
+    plaque.position.set(side * 3.86, 1.22, z);
+    // Face the road; flip local X so letters read L→R when looking from the asphalt
+    // (plane UVs otherwise mirror after the ±90° yaw).
+    plaque.rotation.y = side * (Math.PI / 2);
+    plaque.scale.x = -1;
     namePosts.add(plaque);
   }
   scene.add(namePosts);
@@ -1355,7 +1409,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   const stainGeo = track(new THREE.CircleGeometry(0.24, 16));
   for (let i = 0; i < 6; i++) {
     const side = i % 2 === 0 ? -1 : 1;
-    const z = -696 - i * 12;
+    const z = -roadAt(696 + i * 12);
     const stain = new THREE.Mesh(stainGeo, stainM);
     stain.rotation.x = -Math.PI / 2;
     stain.position.set(side * rand(rng, 4.6, 6.4), 0.008, z);
@@ -1416,18 +1470,18 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     arm.position.x = side * 0.18;
     bushHands.add(arm);
   }
-  bushHands.position.set(4.4, 0, -507);
+  bushHands.position.set(4.4, 0, -roadAt(507));
   bushHands.visible = false;
   scene.add(bushHands);
 
   const glimpseRig = kitCharacter(chars, "glimpse", track, mat, {
-    tint: 0x121212,
+    tint: 0x2a2420,
     roughness: 1,
     scale: [0.92, 1.05, 0.92],
   });
   mixers.push(glimpseRig.mixer);
   const glimpse = glimpseRig.outer;
-  glimpse.position.set(7.4, 0, -495);
+  glimpse.position.set(4.2, 0, -roadAt(495));
   glimpse.visible = false;
   scene.add(glimpse);
 
@@ -1440,7 +1494,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   const otherTray = new THREE.Mesh(track(new THREE.BoxGeometry(0.46, 0.02, 0.3)), otherTrayM);
   otherTray.position.set(0, 0.9, 0.24);
   otherWalker.add(otherTray);
-  otherWalker.position.set(-1.1, 0, -900);
+  otherWalker.position.set(-1.1, 0, OTHER_Z);
   otherWalker.rotation.y = Math.PI;
   otherWalker.visible = false;
   scene.add(otherWalker);
@@ -1451,7 +1505,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   for (let i = 0; i < fireflyCount; i++) {
     fPos[i * 3] = (rng() - 0.5) * 36;
     fPos[i * 3 + 1] = 0.4 + rng() * 3.4;
-    fPos[i * 3 + 2] = rand(rng, 38, -1250);
+    fPos[i * 3 + 2] = rand(rng, 38, ROAD_END);
   }
   const fGeo = track(new THREE.BufferGeometry());
   fGeo.setAttribute("position", new THREE.BufferAttribute(fPos, 3));

@@ -5,8 +5,14 @@ import {
   buildWorld,
   disposeWorld,
   HOUSE_Z,
+  HUNGER_Z,
+  OTHER_Z,
   ROAD_HALF,
+  SENTINEL_Z,
+  WATCHER_Z,
+  WATCHER2_Z,
   WRONG_HOUSE_LIGHT_INTENSITY,
+  roadAt,
   type World,
 } from "@/game/world";
 import { disposeArt, type GameArt } from "@/game/art";
@@ -126,12 +132,18 @@ export class RamenGame {
    * only fires once this is > 0, so the game doesn't spoil the loop before
    * the player has actually looped. */
   private loopCount = 0;
-  private hungerFrom = new THREE.Vector3(0, 0, -640);
+  private hungerFrom = new THREE.Vector3(0, 0, HUNGER_Z);
   private crossing = false;
   private crossingT = 0;
   private bowlHeavy = 0;
   private glimpseUntil = 0;
+  private glimpseSide = 1;
+  private glimpseCaughtT = 0;
   private trayDamage = 0;
+  private hurryFatigue = 0;
+  private roadShake = 0;
+  private otherStepT = 0;
+  private otherStepGap = 3;
   private reducedMotion = false;
   private disposed = false;
   private tmp = new THREE.Vector3();
@@ -492,41 +504,45 @@ export class RamenGame {
     this.metOther = false;
     this.metWatcher2 = false;
     this.houseTalked = false;
-    this.hungerFrom.set(0, 0, -640);
+    this.hungerFrom.set(0, 0, HUNGER_Z);
     this.crossing = false;
     this.crossingT = 0;
     this.bowlHeavy = 0;
     this.glimpseUntil = 0;
+    this.glimpseCaughtT = 0;
     this.trayDamage = Math.min(1, this.trayDamage * 0.72 + 0.1);
+    this.hurryFatigue = 0;
+    this.roadShake = 0;
+    this.otherStepT = 0;
     this.lookingBack = false;
     this.balanceDx = 0;
     this.balanceDy = 0;
     for (const ev of this.events) ev.triggered = false;
 
     const w = this.world;
-    w.mailbox.position.set(-3.15, 0, -90);
+    w.mailbox.position.set(-3.15, 0, SENTINEL_Z);
     w.mailbox.rotation.set(0, Math.PI / 2, 0);
     w.mailboxFlag.rotation.x = 0.35;
     w.mailboxEye.scale.setScalar(0.01);
     w.mailboxEyeMat.emissiveIntensity = 0;
     w.stranger.visible = false;
-    w.stranger.position.set(1.4, 0, -220);
+    w.stranger.position.set(1.4, 0, WATCHER_Z);
     w.monster.visible = false;
-    w.monster.position.set(0, 0, -640);
+    w.monster.position.set(0, 0, HUNGER_Z);
     w.monster.rotation.set(0, 0, 0);
     w.monsterGlow.intensity = 0;
-    w.monsterGlow.position.set(0, 3.1, -638);
+    w.monsterGlow.position.set(0, 3.1, HUNGER_Z + 2);
     w.monsterArms[0].rotation.set(0, 0, -0.12);
     w.monsterArms[1].rotation.set(0, 0, 0.12);
     w.scareFace.visible = false;
     w.scareFace.scale.setScalar(1);
     w.viewmodel.carry.visible = true;
     w.bushHands.visible = false;
-    w.bushHands.position.set(4.4, 0, -507);
+    w.bushHands.position.set(4.4, 0, -roadAt(507));
     w.glimpse.visible = false;
-    w.glimpse.position.set(7.4, 0, -495);
+    w.glimpse.position.set(4.2, 0, -roadAt(495));
     w.otherWalker.visible = false;
-    w.otherWalker.position.set(-1.1, 0, -900);
+    w.otherWalker.position.set(-1.1, 0, OTHER_Z);
     w.wrongHouse.visible = false;
     w.wrongHouseLight.intensity = WRONG_HOUSE_LIGHT_INTENSITY;
     w.lampDying.intensity = 5;
@@ -694,21 +710,37 @@ export class RamenGame {
   private releaseHold() {
     if (this.hold === "watcher") {
       this.world.stranger.visible = false;
-      this.world.stranger.position.set(1.4, 0, -220);
+      this.world.stranger.position.set(1.4, 0, WATCHER_Z);
     }
     if (this.hold === "watcher2") {
       this.world.stranger.visible = false;
-      this.world.stranger.position.set(1.4, 0, -220);
+      this.world.stranger.position.set(1.4, 0, WATCHER_Z);
     }
     if (this.hold === "other") {
       this.world.otherWalker.visible = false;
-      this.world.otherWalker.position.set(-1.1, 0, -900);
+      this.world.otherWalker.position.set(-1.1, 0, OTHER_Z);
     }
     if (this.hold === "hunger") {
       this.hungerFrom.copy(this.world.monster.position);
     }
     this.hold = null;
     this.holdGrace = 0;
+  }
+
+  private startGlimpseTrail(side: number) {
+    this.glimpseSide = side < 0 ? -1 : 1;
+    this.glimpseUntil = this.distance + 28;
+    this.glimpseCaughtT = 0;
+    this.otherStepT = 0;
+    this.world.glimpse.visible = true;
+    this.placeGlimpse();
+  }
+
+  private placeGlimpse() {
+    const p = this.yawObject.position;
+    const g = this.world.glimpse;
+    g.position.set(this.glimpseSide * 4.2, 0, p.z + 5.5);
+    g.lookAt(p.x, 1.4, p.z);
   }
 
   private startSentinel() {
@@ -846,28 +878,32 @@ export class RamenGame {
   }
 
   private trayStrain() {
-    return THREE.MathUtils.clamp((this.distance / (-HOUSE_Z * 0.955)) * 0.62 + this.trayDamage * 0.95, 0, 1.28);
+    return THREE.MathUtils.clamp(
+      (this.distance / (-HOUSE_Z * 0.955)) * 0.62 + this.trayDamage * 0.95 + this.hurryFatigue * 0.45,
+      0,
+      1.28,
+    );
   }
 
   private updateEncounters() {
     const z = this.yawObject.position.z;
-    if (!this.metSentinel && z <= -90) {
+    if (!this.metSentinel && z <= SENTINEL_Z) {
       this.metSentinel = true;
       this.startSentinel();
     }
-    if (!this.metWatcher && z <= -220 && !this.hold) {
+    if (!this.metWatcher && z <= WATCHER_Z && !this.hold) {
       this.metWatcher = true;
       this.startWatcher();
     }
-    if (!this.metHunger && z <= -640 && !this.hold) {
+    if (!this.metHunger && z <= HUNGER_Z && !this.hold) {
       this.metHunger = true;
       this.startHunger();
     }
-    if (!this.metOther && z <= -900 && !this.hold) {
+    if (!this.metOther && z <= OTHER_Z && !this.hold) {
       this.metOther = true;
       this.startOther();
     }
-    if (!this.metWatcher2 && z <= -1100 && !this.hold) {
+    if (!this.metWatcher2 && z <= WATCHER2_Z && !this.hold) {
       this.metWatcher2 = true;
       this.startWatcher2();
     }
@@ -953,9 +989,7 @@ export class RamenGame {
       {
         distance: 328,
         run: () => {
-          this.world.glimpse.position.set(-7.2, 0, this.yawObject.position.z - 11);
-          this.world.glimpse.visible = true;
-          this.glimpseUntil = this.distance + 12;
+          this.startGlimpseTrail(-1);
           this.audio.twig();
         },
       },
@@ -985,9 +1019,7 @@ export class RamenGame {
       {
         distance: 415,
         run: () => {
-          this.world.glimpse.position.set(7.4, 0, -495);
-          this.world.glimpse.visible = true;
-          this.glimpseUntil = 450;
+          this.startGlimpseTrail(1);
           this.audio.twig();
           this.warn("SOMETHING IN THE TREES");
         },
@@ -1082,9 +1114,7 @@ export class RamenGame {
       {
         distance: 860,
         run: () => {
-          this.world.glimpse.position.set(-7.6, 0, this.yawObject.position.z - 10);
-          this.world.glimpse.visible = true;
-          this.glimpseUntil = this.distance + 14;
+          this.startGlimpseTrail(-1);
           this.audio.twig();
           this.warn("SOMETHING IS PACING YOU");
         },
@@ -1122,6 +1152,7 @@ export class RamenGame {
       { distance: 1146, run: () => this.say("ramen_last_stretch") },
       { distance: 1161, run: () => this.say("you_almost") },
     ];
+    for (const ev of this.events) ev.distance = roadAt(ev.distance);
   }
 
   private backScare() {
@@ -1198,6 +1229,7 @@ export class RamenGame {
     this.world.viewmodel.carry.rotation.z = Math.sin(t * 0.7) * 0.02;
     this.world.viewmodel.carry.rotation.x = Math.sin(t * 0.5) * 0.01;
     this.animateSteam(t, 1);
+    this.audio.setBreath(0);
   }
 
   private updatePlay(dt: number, t: number) {
@@ -1221,6 +1253,13 @@ export class RamenGame {
     const moving = mlen > 0.08;
     this.lastSpeed = moving ? speed * Math.min(1, mlen) : 0;
 
+    if (running && moving && !this.spilled) {
+      this.hurryFatigue += dt / 8;
+    } else {
+      this.hurryFatigue -= dt / 5;
+    }
+    this.hurryFatigue = THREE.MathUtils.clamp(this.hurryFatigue, 0, 1);
+
     const fx = -Math.sin(this.yaw);
     const fz = -Math.cos(this.yaw);
     const rx = Math.cos(this.yaw);
@@ -1238,6 +1277,7 @@ export class RamenGame {
     this.steerLookToSpeaker(dt);
     const yawMod = ((this.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     this.lookingBack = Math.abs(yawMod - Math.PI) < 0.95;
+    this.roadShake = THREE.MathUtils.smoothstep(this.distance / -HOUSE_Z, 0.12, 1);
 
     const bob = moving ? Math.sin(this.walkCycle) * 0.028 : 0;
     if (moving) {
@@ -1255,21 +1295,24 @@ export class RamenGame {
     const MU_S = 0.2 * (1 - strain * 0.55);
     const MU_K = 0.11 * (1 - strain * 0.5);
     const BOWL_Y = 0.01;
-    const restore = 4.2 * (1 - strain * 0.48);
-    const damp = 5.5 * (1 - strain * 0.38);
+    const restore = 4.2 * (1 - strain * 0.48) * (1 - this.hurryFatigue * 0.55) * (1 - this.roadShake * 0.4);
+    const damp = 5.5 * (1 - strain * 0.38) * (1 - this.hurryFatigue * 0.5) * (1 - this.roadShake * 0.4);
 
     this.trayRollV += this.balanceDx * (0.024 * (1 - strain * 0.22));
     this.balanceDx = 0;
     this.balanceDy = 0;
     if (moving) {
       this.trayRollV += right * (1.25 + strain * 1.4) * dt;
-      this.trayRollV += Math.sin(this.walkCycle) * ((running ? 1.85 : 0.82) + strain * 1.7) * dt;
+      const runWobble = running ? THREE.MathUtils.lerp(1.85, 3.1, this.hurryFatigue) : 0.82;
+      this.trayRollV += Math.sin(this.walkCycle) * (runWobble + strain * 1.7) * dt;
     }
     if (this.hold) this.trayRollV += (Math.random() - 0.5) * (2.4 + strain * 4) * dt;
     if (this.scareT > 0) {
       this.trayRollV += (Math.random() - 0.5) * (8 + strain * 6) * dt;
     }
     this.trayRollV += (Math.random() - 0.5) * strain * 5.5 * dt;
+    this.trayRollV += (Math.random() - 0.5) * this.hurryFatigue * 9 * dt;
+    this.trayRollV += (Math.random() - 0.5) * this.roadShake * 8 * dt;
     this.trayRollV += -this.trayRoll * restore * dt;
     this.trayRollV *= Math.exp(-damp * dt);
     this.trayRoll += this.trayRollV * dt;
@@ -1363,6 +1406,23 @@ export class RamenGame {
       (this.distance / -HOUSE_Z) * 0.5 + (this.spilled ? 0.5 : 0) + (1 - stability / 100) * 0.5,
     );
     if (stability < 38 && !this.spilled) this.audio.heartbeat();
+    this.audio.setBreath(
+      this.spilled ? 0 : Math.max(this.roadShake * 0.55, this.hurryFatigue, 1 - stability / 100),
+    );
+    this.otherStepT += dt;
+    if (this.world.glimpse.visible) {
+      if (this.otherStepT >= 0.55) {
+        this.otherStepT = 0;
+        this.audio.otherStep(this.glimpseSide);
+        if (Math.random() < 0.38) this.audio.otherBreath(this.glimpseSide);
+      }
+    } else if (this.roadShake > 0.28 && moving) {
+      if (this.otherStepT >= this.otherStepGap) {
+        this.otherStepT = 0;
+        this.otherStepGap = 2.5 + Math.random() * 1.5;
+        this.audio.otherStep(Math.random() > 0.5 ? 1 : -1);
+      }
+    }
 
     this.bowlHeavy = Math.max(0, this.bowlHeavy - dt);
 
@@ -1394,7 +1454,7 @@ export class RamenGame {
       if (u >= 1) {
         this.crossing = false;
         this.world.stranger.visible = false;
-        this.world.stranger.position.set(1.4, 0, -220);
+        this.world.stranger.position.set(1.4, 0, WATCHER_Z);
       }
     } else if (this.world.stranger.visible) {
       this.world.strangerHead.lookAt(
@@ -1410,13 +1470,20 @@ export class RamenGame {
         this.yawObject.position.z,
       );
     }
-    if (this.world.glimpse.visible && this.glimpseUntil > 0 && this.distance > this.glimpseUntil) {
-      this.world.glimpse.visible = false;
+    if (this.world.glimpse.visible) {
+      this.placeGlimpse();
+      if (this.lookingBack) {
+        this.glimpseCaughtT += dt;
+        if (this.glimpseCaughtT > 1) this.world.glimpse.visible = false;
+      }
+      if (this.glimpseUntil > 0 && this.distance > this.glimpseUntil) {
+        this.world.glimpse.visible = false;
+      }
     }
     if (this.world.bushHands.visible) {
       this.world.bushHands.position.x = 4.1 + Math.sin(t * 8) * 0.15;
       this.world.bushHands.position.y = 0.15 + Math.sin(t * 10) * 0.08;
-      if (this.distance > 524) this.world.bushHands.visible = false;
+      if (this.distance > roadAt(524)) this.world.bushHands.visible = false;
     }
 
     if (this.grabbing) {
@@ -1493,7 +1560,7 @@ export class RamenGame {
       }
     }
 
-    if (this.lookingBack && this.distance > 338 && this.distance < 380 && !this.seenBack) {
+    if (this.lookingBack && this.distance > roadAt(338) && this.distance < roadAt(380) && !this.seenBack) {
       this.backScare();
     }
 
@@ -1596,12 +1663,11 @@ export class RamenGame {
     const decay = 1.8;
     this.trauma = Math.max(0, this.trauma - decay * 0.016);
     const s = this.trauma * this.trauma;
-    if (s < 0.001) {
-      this.camera.rotation.z = 0;
-      return;
-    }
-    this.camera.position.x = (Math.sin(t * 47) * 0.08 + Math.sin(t * 23) * 0.04) * s;
-    this.camera.rotation.z = Math.sin(t * 31) * 0.04 * s;
+    const rs = this.roadShake;
+    this.camera.position.x =
+      (Math.sin(t * 47) * 0.08 + Math.sin(t * 23) * 0.04) * s +
+      (Math.sin(t * 47) * 0.014 + Math.sin(t * 13) * 0.008) * rs;
+    this.camera.rotation.z = Math.sin(t * 31) * 0.04 * s + Math.sin(t * 31) * 0.012 * rs;
   }
 
   private installProbe() {
