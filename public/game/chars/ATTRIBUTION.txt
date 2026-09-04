@@ -1,0 +1,24 @@
+Character model: "Animated Characters 3" by Kenney (www.kenney.nl)
+License: Creative Commons Zero (CC0) — https://creativecommons.org/publicdomain/zero/1.0/
+Attribution not required, credited here anyway.
+
+Original source files were FBX (model + separate idle/run animation clips,
+shared skeleton) and were converted to glTF/GLB with Facebook's FBX2glTF
+(https://github.com/facebookincubator/FBX2glTF) for use with three.js's
+GLTFLoader. No visual/geometry changes were made beyond format conversion.
+
+Files:
+- character-base.glb  -> shared human-proportioned rig + mesh (no material)
+- anim-idle.glb        -> "idle" animation clip (same skeleton)
+- anim-run.glb         -> "run" animation clip (same skeleton)
+- skins/human-male.png, human-female.png, zombie-male.png, zombie-female.png
+  -> diffuse skins, applied at runtime per character (see src/game/world.ts)
+
+Skin assignment:
+- SENTINEL / THE OTHER -> human-male.png (different tint/scale each)
+- WATCHER              -> human-female.png (pale tint, taller scale)
+- THE HUNGER           -> zombie-male.png (dark wet tint, scaled up, plus
+                          the game's own extra-eyes/jaw props)
+- GLIMPSE              -> zombie-female.png (very dark, gaunt tint)
+
+Source: https://opengameart.org/content/animated-characters-3

@@ -1,4 +1,4 @@
-export type Speaker = "YOU" | "RAMEN" | "SENTINEL" | "WATCHER" | "THE HUNGER";
+export type Speaker = "YOU" | "RAMEN" | "SENTINEL" | "WATCHER" | "THE HUNGER" | "THE OTHER";
 
 export type VoiceLine = {
   id: string;
@@ -22,8 +22,13 @@ export const SPEAKER_REF = {
   YOU: "ref_you.mp3",
   RAMEN: "ref_ramen.mp3",
   SENTINEL: "ref_sentinel.mp3",
-  WATCHER: "ref_watcher.wav",
-  "THE HUNGER": "ref_hunger.wav",
+  WATCHER: "ref_watcher.mp3",
+  "THE HUNGER": "ref_hunger.mp3",
+  // No dedicated reference clip recorded — reuses YOU's voice. This isn't
+  // just a stopgap: The Other is meant to read as an echo of the player,
+  // someone who already made this exact walk, so sharing a voice actor
+  // reinforces the reveal instead of undercutting it.
+  "THE OTHER": "ref_you.mp3",
 } as const;
 
 /** Drop generated files in src/soundassets matching `file` (wav, or mp3 with the same stem). */
@@ -114,6 +119,76 @@ export const VOICE_LINES = [
   { id: "hunger_liar", speaker: "THE HUNGER", text: "Liar.", file: "hunger_liar.wav", mood: "wet angry", emo_alpha: 0.82, emo_text: "Sudden anger, still low, wet, one word like a bite." },
   { id: "hunger_share", speaker: "THE HUNGER", text: "Share.", file: "hunger_share.wav", mood: "wet demand", emo_alpha: 0.8, emo_text: "Demand, hungry, wet, not asking, low." },
   { id: "hunger_pork", speaker: "THE HUNGER", text: "I prefer pork.", file: "hunger_pork.wav", mood: "wet satisfied", emo_alpha: 0.65, emo_text: "After feeding, low, satisfied, wet, almost polite again." },
+
+  // --- Act 1/2 bridge: fills the old 44m-158m dead stretch after the Sentinel ---
+  { id: "you_names_posts", speaker: "YOU", text: "Names. Carved into the fence posts. Some of them still have paint.", file: "you_names_posts.wav", mood: "quiet unease", emo_alpha: 0.56, emo_text: "Noticing something wrong on the roadside, quiet, close mic, not panicked yet." },
+  { id: "ramen_names_posts", speaker: "RAMEN", text: "Read them if you want. I won't stop you.", file: "ramen_names_posts.wav", mood: "cold permission", emo_alpha: 0.58, emo_text: "Too calm, giving permission it shouldn't need to give, intimate, faintly amused." },
+
+  // --- Offerings: overturned bowls on the shoulder, first hint of the toll ---
+  { id: "you_offerings", speaker: "YOU", text: "There are bowls on the shoulder. All of them empty.", file: "you_offerings.wav", mood: "quiet dread", emo_alpha: 0.58, emo_text: "Quiet, unsettled observation, close mic, not theatrical." },
+  { id: "ramen_offerings", speaker: "RAMEN", text: "Empty means paid.", file: "ramen_offerings.wav", mood: "cold instructional", emo_alpha: 0.6, emo_text: "Even, cold, intimate, stating a rule without explaining it." },
+
+  // --- Act 4 opening bridge: after the Hunger, before The Other ---
+  { id: "you_still_here", speaker: "YOU", text: "I'm still walking. That has to count for something.", file: "you_still_here.wav", mood: "worn hope", emo_alpha: 0.55, emo_text: "Worn down but holding on, quiet, trying to believe it." },
+  { id: "ramen_others", speaker: "RAMEN", text: "Others have made it this far. Some of them.", file: "ramen_others.wav", mood: "cool ambiguous", emo_alpha: 0.58, emo_text: "Cool, ambiguous comfort, intimate, the second sentence colder than the first." },
+  { id: "you_others", speaker: "YOU", text: "Some of them?", file: "you_others.wav", mood: "wary", emo_alpha: 0.6, emo_text: "Wary, doesn't want to ask but has to, quiet." },
+  { id: "ramen_others_answer", speaker: "RAMEN", text: "The road doesn't always send them home the same way.", file: "ramen_others_answer.wav", mood: "cold evasive", emo_alpha: 0.64, emo_text: "Evasive, cold, intimate, refusing to elaborate." },
+  { id: "you_narrow", speaker: "YOU", text: "This didn't used to be this narrow.", file: "you_narrow.wav", mood: "disoriented", emo_alpha: 0.58, emo_text: "Disoriented, noticing the road change, quiet, uneasy." },
+  { id: "ramen_narrow", speaker: "RAMEN", text: "It isn't the road that's changed.", file: "ramen_narrow.wav", mood: "cold correction", emo_alpha: 0.62, emo_text: "Cold correction, intimate, lets the implication sit." },
+  { id: "you_close_now", speaker: "YOU", text: "It's close now. I can feel it being close.", file: "you_close_now.wav", mood: "breathless hope", emo_alpha: 0.55, emo_text: "Breathless, hopeful, trying to convince himself, quiet." },
+
+  // --- The Other: a figure walking the opposite way, tray empty ---
+  { id: "other_evening", speaker: "THE OTHER", text: "Evening.", file: "other_evening.wav", mood: "flat calm", emo_alpha: 0.4, emo_text: "Flat, hollowed-out calm, not unfriendly, past caring, even volume." },
+  { id: "you_other_hello", speaker: "YOU", text: "...hi.", file: "you_other_hello.wav", mood: "uneasy", emo_alpha: 0.5, emo_text: "Uneasy, caught off guard, small, quiet." },
+  { id: "other_empty", speaker: "THE OTHER", text: "Tray's empty. Has been for a while.", file: "other_empty.wav", mood: "flat resigned", emo_alpha: 0.45, emo_text: "Flat, resigned, no self-pity, just reporting a fact." },
+  { id: "you_other_where", speaker: "YOU", text: "Did you already—are you going the wrong way?", file: "you_other_where.wav", mood: "confused concern", emo_alpha: 0.58, emo_text: "Confused, a little concerned, close mic, trailing off." },
+  { id: "other_no_wrong_way", speaker: "THE OTHER", text: "There's no wrong way. Just the long way and the longer way.", file: "other_no_wrong_way.wav", mood: "flat tired", emo_alpha: 0.5, emo_text: "Flat, tired of the question, not unkind, even." },
+  { id: "ramen_dont_ask", speaker: "RAMEN", text: "Don't ask him anything else.", file: "ramen_dont_ask.wav", mood: "urgent control", emo_alpha: 0.68, emo_text: "Urgent, controlling, close to the ear, no shout." },
+  { id: "other_she_talks", speaker: "THE OTHER", text: "It still talks to you? Mine went quiet after the first time.", file: "other_she_talks.wav", mood: "flat curious", emo_alpha: 0.5, emo_text: "Mild curiosity, flat, a little envious underneath, even." },
+  { id: "you_first_time", speaker: "YOU", text: "First time?", file: "you_first_time.wav", mood: "dreading answer", emo_alpha: 0.6, emo_text: "Doesn't want the answer, quiet, close mic." },
+  { id: "other_lost_count", speaker: "THE OTHER", text: "I stopped counting. You will too.", file: "other_lost_count.wav", mood: "flat prophecy", emo_alpha: 0.55, emo_text: "Flat, not cruel, just certain, even, like stating the weather." },
+  { id: "ramen_walk_now", speaker: "RAMEN", text: "Walk. Now.", file: "ramen_walk_now.wav", mood: "sharp command", emo_alpha: 0.72, emo_text: "Sharp, urgent command, close, no room for argument, still not a shout." },
+  { id: "other_see_you_again", speaker: "THE OTHER", text: "See you out here again.", file: "other_see_you_again.wav", mood: "flat farewell", emo_alpha: 0.5, emo_text: "Flat farewell, not a threat exactly, just certain, even volume." },
+  { id: "you_other_aftershock", speaker: "YOU", text: "I don't want to see him again.", file: "you_other_aftershock.wav", mood: "shaken quiet", emo_alpha: 0.6, emo_text: "Shaken, quiet, close mic, trying to sound sure." },
+
+  // --- Act 4 continued: after The Other, before the second Watcher ---
+  { id: "ramen_shaken", speaker: "RAMEN", text: "That shook you.", file: "ramen_shaken.wav", mood: "calm observation", emo_alpha: 0.55, emo_text: "Calm observation, intimate, not comforting, just noting it." },
+  { id: "ramen_toll", speaker: "RAMEN", text: "He paid a toll to get this far. Empty means paid.", file: "ramen_toll.wav", mood: "even instructional", emo_alpha: 0.6, emo_text: "Even, instructional, intimate, explaining a rule like it's obvious." },
+  { id: "you_toll", speaker: "YOU", text: "What's my toll.", file: "you_toll.wav", mood: "flat dread", emo_alpha: 0.58, emo_text: "Flat, dreading the answer, quiet, close mic." },
+  { id: "ramen_toll_answer", speaker: "RAMEN", text: "You already started paying it. Every scare. Every spill.", file: "ramen_toll_answer.wav", mood: "gentle wrong", emo_alpha: 0.62, emo_text: "Gentle, wrong, intimate, delivered like reassurance." },
+
+  // --- Wrong house: a second house ahead, not the real one ---
+  { id: "you_wrong_house_sight", speaker: "YOU", text: "There's a house. Windows lit.", file: "you_wrong_house_sight.wav", mood: "fragile hope", emo_alpha: 0.55, emo_text: "Fragile hope, wants to believe it, quiet, close mic." },
+  { id: "ramen_wrong_house_sight", speaker: "RAMEN", text: "Not yet.", file: "ramen_wrong_house_sight.wav", mood: "flat correction", emo_alpha: 0.55, emo_text: "Flat, quiet correction, intimate, no comfort offered." },
+
+  // --- Second Watcher encounter: recognition, darker ---
+  { id: "watcher2_again", speaker: "WATCHER", text: "You again.", file: "watcher2_again.wav", mood: "too polite", emo_alpha: 0.48, emo_text: "Too polite, even, faint recognition, no surprise at all." },
+  { id: "you_watcher2_surprised", speaker: "YOU", text: "We already met.", file: "you_watcher2_surprised.wav", mood: "defensive confused", emo_alpha: 0.55, emo_text: "Defensive, confused, a little too fast, quiet." },
+  { id: "watcher2_we_always", speaker: "WATCHER", text: "We always do. That's rather the point.", file: "watcher2_we_always.wav", mood: "polite certainty", emo_alpha: 0.55, emo_text: "Polite certainty, even, no rush, like explaining something obvious." },
+  { id: "watcher2_carrying_still", speaker: "WATCHER", text: "Still carrying it, I see.", file: "watcher2_carrying_still.wav", mood: "focused polite", emo_alpha: 0.52, emo_text: "Focused, polite, even, looking at the tray not the face." },
+  { id: "you_watcher2_almost_home", speaker: "YOU", text: "I'm almost home.", file: "you_watcher2_almost_home.wav", mood: "defensive hope", emo_alpha: 0.55, emo_text: "Defensive, hopeful, wants this to be true, quiet." },
+  { id: "watcher2_almost", speaker: "WATCHER", text: "You were almost home last time too.", file: "watcher2_almost.wav", mood: "polite devastation", emo_alpha: 0.62, emo_text: "Polite, even, devastating content delivered gently, no cruelty in the tone." },
+  { id: "ramen_ignore_him", speaker: "RAMEN", text: "Ignore him. Walk.", file: "ramen_ignore_him.wav", mood: "urgent control", emo_alpha: 0.68, emo_text: "Urgent, controlling, close, protective in a wrong way." },
+  { id: "watcher2_farewell", speaker: "WATCHER", text: "Good luck this time.", file: "watcher2_farewell.wav", mood: "polite chill", emo_alpha: 0.55, emo_text: "Polite send-off, even, the word 'time' landing colder than the rest." },
+
+  // --- Final approach ---
+  { id: "you_last_stretch", speaker: "YOU", text: "Last stretch. Has to be.", file: "you_last_stretch.wav", mood: "worn hope", emo_alpha: 0.52, emo_text: "Worn, hopeful, trying to convince himself, quiet, close mic." },
+  { id: "ramen_last_stretch", speaker: "RAMEN", text: "It is. This time.", file: "ramen_last_stretch.wav", mood: "gentle wrong", emo_alpha: 0.6, emo_text: "Gentle, intimate, the last two words colder, wrong." },
+
+  // --- House talk, extended ---
+  { id: "ramen_names_kept", speaker: "RAMEN", text: "The Sentinel will keep your name anyway. Just in case.", file: "ramen_names_kept.wav", mood: "gentle wrong", emo_alpha: 0.62, emo_text: "Gentle, intimate, delivered like a kindness, wrong." },
+  { id: "you_home_final", speaker: "YOU", text: "I'm home.", file: "you_home_final.wav", mood: "quiet uncertain relief", emo_alpha: 0.5, emo_text: "Quiet relief that doesn't fully believe itself, close mic." },
+  { id: "ramen_home_final", speaker: "RAMEN", text: "For now.", file: "ramen_home_final.wav", mood: "cold final", emo_alpha: 0.62, emo_text: "Cold, final, intimate, no comfort, close to the ear." },
+
+  // --- Extra asides for variety across repeated walks ---
+  { id: "you_legs", speaker: "YOU", text: "My legs stopped complaining a while ago.", file: "you_legs.wav", mood: "numb tired", emo_alpha: 0.5, emo_text: "Numb, tired, muttering to self, close mic, no energy." },
+  { id: "you_lamps_row", speaker: "YOU", text: "That's three lamps in a row now. There weren't three in a row before.", file: "you_lamps_row.wav", mood: "trying not to panic", emo_alpha: 0.58, emo_text: "Trying to stay logical, fear leaking in, not shouting." },
+  { id: "you_smell", speaker: "YOU", text: "I can smell it through the lid.", file: "you_smell.wav", mood: "quiet dread", emo_alpha: 0.52, emo_text: "Quiet, uneasy noticing, close mic, not theatrical." },
+  { id: "you_talk_self", speaker: "YOU", text: "I'm talking to myself. That's all this is.", file: "you_talk_self.wav", mood: "unconvincing", emo_alpha: 0.5, emo_text: "Trying to convince himself, unconvincing, quiet, close mic." },
+  { id: "ramen_careful", speaker: "RAMEN", text: "Careful.", file: "ramen_careful.wav", mood: "soft correction", emo_alpha: 0.5, emo_text: "Soft correction, close to the ear, even." },
+  { id: "ramen_steady", speaker: "RAMEN", text: "Steady.", file: "ramen_steady.wav", mood: "matter-of-fact", emo_alpha: 0.5, emo_text: "Matter of fact, intimate, no panic." },
+  { id: "ramen_good_pace", speaker: "RAMEN", text: "Good pace. Keep it.", file: "ramen_good_pace.wav", mood: "leash calm", emo_alpha: 0.5, emo_text: "Approval that feels like a leash, calm, intimate." },
+  { id: "ramen_here_again", speaker: "RAMEN", text: "Here we go again.", file: "ramen_here_again.wav", mood: "tired knowing", emo_alpha: 0.58, emo_text: "Tired, knowing, intimate, almost fond of the routine, wrong." },
 ] as const satisfies readonly VoiceLine[];
 
 export type LineId = (typeof VOICE_LINES)[number]["id"];
@@ -132,7 +207,23 @@ export const VOICE_NOTES: Record<Speaker, string> = {
   SENTINEL: "Dry roadside watchman. Formal. Unblinking. No smile.",
   WATCHER: "Polite stranger. Too polite. Even volume. No hurry.",
   "THE HUNGER": "Large, wet, hungry. Low. Not human-careful.",
+  "THE OTHER": "Someone who already finished this walk once. Flat, hollowed-out calm. Not unfriendly — just past caring.",
 };
 
-export const YOU_ASIDES = ["you_fog", "you_hands", "you_wet"] as const satisfies readonly LineId[];
-export const RAMEN_ASIDES = ["ramen_easy", "ramen_tilting", "ramen_left"] as const satisfies readonly LineId[];
+export const YOU_ASIDES = [
+  "you_fog",
+  "you_hands",
+  "you_wet",
+  "you_legs",
+  "you_lamps_row",
+  "you_smell",
+  "you_talk_self",
+] as const satisfies readonly LineId[];
+export const RAMEN_ASIDES = [
+  "ramen_easy",
+  "ramen_tilting",
+  "ramen_left",
+  "ramen_careful",
+  "ramen_steady",
+  "ramen_good_pace",
+] as const satisfies readonly LineId[];

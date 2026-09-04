@@ -1,8 +1,19 @@
 import * as THREE from "three";
+import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import { cutoutMat, type GameArt } from "@/game/art";
+import { CHARACTER_SKIN, type CharacterAssets, type CharacterKey } from "@/game/characters";
 
-export const HOUSE_Z = -650;
+/** The shared rig (see characters.ts) is authored at ~3.7 native units tall
+ * (head to toe). Scale it down so a default character reads as a normal
+ * ~1.8m adult in this game's meter-scale world. */
+const BASE_CHAR_SCALE = 1.8 / 3.7;
+
+export const HOUSE_Z = -1200;
 export const ROAD_HALF = 3.55;
+
+// Where the false destination sits between The Other and the second Watcher.
+export const WRONG_HOUSE_Z = -1085;
+export const WRONG_HOUSE_LIGHT_INTENSITY = 2.4;
 
 type Rng = () => number;
 
@@ -59,6 +70,101 @@ function makeSilhouette(draw: (ctx: CanvasRenderingContext2D, w: number, h: numb
   return tex;
 }
 
+/** Weathered horizontal-plank siding, procedurally painted (same canvas-texture
+ * pipeline as the rest of the game's art instead of a downloaded photo). */
+function makePlankTexture() {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext("2d");
+  if (!ctx) throw new Error("2d");
+  ctx.fillStyle = "#584636";
+  ctx.fillRect(0, 0, 128, 128);
+  const rows = 8;
+  for (let i = 0; i < rows; i++) {
+    const y = (i / rows) * 128;
+    const h = 128 / rows;
+    const shade = 60 + ((i * 37) % 26) - 13;
+    ctx.fillStyle = `rgb(${shade + 40},${shade + 28},${shade + 16})`;
+    ctx.fillRect(0, y, 128, h - 2);
+    ctx.fillStyle = "rgba(20,14,8,0.55)";
+    ctx.fillRect(0, y + h - 2, 128, 2);
+    ctx.fillStyle = "rgba(0,0,0,0.12)";
+    for (let g = 0; g < 5; g++) {
+      const gx = (g / 5) * 128 + ((i % 2) * 12);
+      ctx.fillRect(gx, y, 1, h - 2);
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Overlapping roof shingles, same procedural approach as the siding. */
+function makeShingleTexture() {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext("2d");
+  if (!ctx) throw new Error("2d");
+  ctx.fillStyle = "#1e1a16";
+  ctx.fillRect(0, 0, 128, 128);
+  const rows = 10;
+  for (let i = 0; i < rows; i++) {
+    const y = (i / rows) * 128;
+    const h = 128 / rows;
+    const offset = (i % 2) * 10;
+    ctx.fillStyle = i % 2 === 0 ? "#28221c" : "#211c17";
+    for (let x = -10; x < 128; x += 20) {
+      ctx.beginPath();
+      ctx.moveTo(x + offset, y + h);
+      ctx.lineTo(x + offset + 10, y);
+      ctx.lineTo(x + offset + 20, y + h);
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.fillRect(0, y + h - 1.5, 128, 1.5);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Small roadside marker with a scratched, half-legible name scored into it. */
+function makeNamePostTexture(seed: number) {
+  const rng = mulberry32(seed);
+  return makeSilhouette((ctx, w, h) => {
+    ctx.fillStyle = "#3a2e22";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    for (let i = 0; i < 6; i++) {
+      ctx.fillRect(0, (i / 6) * h, w, 1.5);
+    }
+    ctx.strokeStyle = "rgba(214,206,190,0.65)";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    const lines = 2 + Math.floor(rng() * 2);
+    for (let l = 0; l < lines; l++) {
+      const y = h * (0.32 + l * 0.22) + rand(rng, -6, 6);
+      let x = w * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      const strokes = 4 + Math.floor(rng() * 5);
+      for (let s = 0; s < strokes; s++) {
+        x += w * rand(rng, 0.08, 0.16);
+        ctx.lineTo(x, y + rand(rng, -8, 8));
+      }
+      ctx.stroke();
+    }
+  }, 128, 96);
+}
+
 function stdMat(
   mat: <T extends THREE.Material>(m: T) => T,
   color: number,
@@ -98,119 +204,6 @@ function makeDigitHand(
   return g;
 }
 
-type PersonOpts = {
-  coat: number;
-  pants: number;
-  boot: number;
-  skin: number;
-  hat?: "brim" | "peak" | "none";
-  hatColor?: number;
-  voidFace?: boolean;
-  scale?: number;
-  gaunt?: boolean;
-};
-
-function makePerson(
-  track: (g: THREE.BufferGeometry) => THREE.BufferGeometry,
-  mat: <T extends THREE.Material>(m: T) => T,
-  opts: PersonOpts,
-) {
-  const root = new THREE.Group();
-  const coatM = stdMat(mat, opts.coat, { roughness: 0.9 });
-  const pantsM = stdMat(mat, opts.pants, { roughness: 0.84 });
-  const bootM = stdMat(mat, opts.boot, { roughness: 0.52 });
-  const skinM = stdMat(mat, opts.skin, { roughness: 0.62 });
-  const hatM = stdMat(mat, opts.hatColor ?? 0x1a1a18, { roughness: 0.7 });
-  const darkM = stdMat(mat, 0x050505, { roughness: 1 });
-  const gaunt = opts.gaunt ? 0.78 : 1;
-  const s = opts.scale ?? 1;
-
-  const bootL = new THREE.Mesh(track(new THREE.BoxGeometry(0.11, 0.14, 0.22)), bootM);
-  bootL.position.set(-0.09, 0.07, 0.02);
-  const bootR = bootL.clone();
-  bootR.position.x = 0.09;
-  const calfL = new THREE.Mesh(track(new THREE.CylinderGeometry(0.05, 0.058, 0.42, 10)), pantsM);
-  calfL.position.set(-0.09, 0.34, 0);
-  const calfR = calfL.clone();
-  calfR.position.x = 0.09;
-  const thighL = new THREE.Mesh(track(new THREE.CylinderGeometry(0.062, 0.055, 0.4, 10)), pantsM);
-  thighL.position.set(-0.09, 0.72, 0);
-  const thighR = thighL.clone();
-  thighR.position.x = 0.09;
-  const hips = new THREE.Mesh(track(new THREE.SphereGeometry(0.16, 12, 8)), pantsM);
-  hips.scale.set(1.15, 0.7, 0.9);
-  hips.position.y = 0.92;
-
-  const coat = new THREE.Mesh(track(new THREE.CylinderGeometry(0.2 * gaunt, 0.28 * gaunt, 0.85, 12)), coatM);
-  coat.position.y = 1.28;
-  const lapel = new THREE.Mesh(track(new THREE.BoxGeometry(0.22, 0.38, 0.04)), coatM);
-  lapel.position.set(0, 1.42, 0.2 * gaunt);
-  const collar = new THREE.Mesh(track(new THREE.TorusGeometry(0.11, 0.035, 6, 12, Math.PI)), coatM);
-  collar.position.set(0, 1.68, 0.02);
-  collar.rotation.x = 0.4;
-  const shoulders = new THREE.Mesh(track(new THREE.SphereGeometry(0.2, 12, 8)), coatM);
-  shoulders.scale.set(1.15 * gaunt, 0.55, 0.8);
-  shoulders.position.y = 1.66;
-
-  const headPivot = new THREE.Group();
-  headPivot.position.y = 1.78;
-  const neck = new THREE.Mesh(track(new THREE.CylinderGeometry(0.05, 0.06, 0.12, 10)), skinM);
-  neck.position.y = -0.08;
-  const head = new THREE.Mesh(track(new THREE.SphereGeometry(0.145, 16, 12)), opts.voidFace ? darkM : skinM);
-  head.scale.set(0.92, 1.12, 0.95);
-  head.position.y = 0.12;
-  headPivot.add(neck, head);
-  if (opts.voidFace) {
-    const hole = new THREE.Mesh(track(new THREE.CircleGeometry(0.08, 12)), darkM);
-    hole.position.set(0, 0.1, 0.13);
-    headPivot.add(hole);
-  } else {
-    const brow = new THREE.Mesh(track(new THREE.BoxGeometry(0.16, 0.025, 0.04)), skinM);
-    brow.position.set(0, 0.16, 0.12);
-    const nose = new THREE.Mesh(track(new THREE.BoxGeometry(0.028, 0.05, 0.04)), skinM);
-    nose.position.set(0, 0.08, 0.14);
-    headPivot.add(brow, nose);
-  }
-
-  const hatKind = opts.hat ?? "none";
-  if (hatKind === "brim") {
-    const brim = new THREE.Mesh(track(new THREE.CylinderGeometry(0.22, 0.22, 0.02, 16)), hatM);
-    brim.position.y = 0.22;
-    const crown = new THREE.Mesh(track(new THREE.CylinderGeometry(0.12, 0.14, 0.14, 12)), hatM);
-    crown.position.y = 0.3;
-    headPivot.add(brim, crown);
-  } else if (hatKind === "peak") {
-    const cap = new THREE.Mesh(track(new THREE.SphereGeometry(0.15, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)), hatM);
-    cap.position.y = 0.2;
-    cap.scale.set(1.05, 0.7, 1.05);
-    const peak = new THREE.Mesh(track(new THREE.BoxGeometry(0.16, 0.02, 0.12)), hatM);
-    peak.position.set(0, 0.16, 0.14);
-    peak.rotation.x = -0.25;
-    headPivot.add(cap, peak);
-  }
-
-  function arm(side: number) {
-    const g = new THREE.Group();
-    g.position.set(side * 0.24 * gaunt, 1.58, 0);
-    const upper = new THREE.Mesh(track(new THREE.CylinderGeometry(0.045, 0.04, 0.34, 10)), coatM);
-    upper.position.y = -0.17;
-    const lower = new THREE.Mesh(track(new THREE.CylinderGeometry(0.038, 0.032, 0.32, 10)), coatM);
-    lower.position.y = -0.48;
-    const hand = makeDigitHand(track, skinM, side);
-    hand.position.y = -0.68;
-    hand.rotation.x = 0.2;
-    g.add(upper, lower, hand);
-    g.rotation.z = side * 0.12;
-    return g;
-  }
-  const armL = arm(-1);
-  const armR = arm(1);
-
-  root.add(bootL, bootR, calfL, calfR, thighL, thighR, hips, coat, lapel, collar, shoulders, headPivot, armL, armR);
-  root.scale.setScalar(s);
-  return { root, headPivot, armL, armR, head };
-}
-
 function jitterIcosahedron(scale: number, rng: Rng) {
   const geo = new THREE.IcosahedronGeometry(scale, 0);
   const pos = geo.attributes.position;
@@ -226,6 +219,118 @@ function jitterIcosahedron(scale: number, rng: Rng) {
   return geo;
 }
 
+// ---------------------------------------------------------------------------
+// GLTF character rigs (Kenney "Blocky Characters", CC0 — see
+// public/game/chars/ATTRIBUTION.txt). Each GLB shares the same rig:
+// root -> leg-left, leg-right, torso -> arm-left, arm-right, head. Only
+// `head` carries its own local scale (0.1), so prop anchors on the head
+// need a compensating wrapper; everything else is unscaled.
+// ---------------------------------------------------------------------------
+
+export type CharacterRig = {
+  /** Add this to the scene / reposition every frame — matches the old NPC roots. */
+  outer: THREE.Group;
+  head: THREE.Object3D;
+  torso: THREE.Object3D;
+  /** Upper-arm bones. Bind pose carries a big roll/twist on these, so only
+   * use them for one-time SCALE effects (e.g. Hunger's stretched arms) —
+   * their visible mesh deformation responds to bone transforms directly.
+   * Do not directly set .rotation on these; see foreArmL/foreArmR. */
+  armL: THREE.Object3D;
+  armR: THREE.Object3D;
+  /** Forearm bones — near-identity bind rotation, safe to drive per-frame
+   * gestures (raise/reach) with plain .rotation.x/.set() like the old rig. */
+  foreArmL: THREE.Object3D;
+  foreArmR: THREE.Object3D;
+  /** Hand bones — good, stable attachment points for held props (lantern, tray). */
+  handL: THREE.Object3D;
+  handR: THREE.Object3D;
+  mixer: THREE.AnimationMixer;
+};
+
+function neutralize(parent: THREE.Object3D) {
+  const g = new THREE.Group();
+  g.scale.set(1 / (parent.scale.x || 1), 1 / (parent.scale.y || 1), 1 / (parent.scale.z || 1));
+  parent.add(g);
+  return g;
+}
+
+/**
+ * Builds one NPC from the shared human-proportioned rig (see characters.ts):
+ * clones the base skeleton+mesh, gives it its own skin texture + tint, and
+ * wires up bone references other code hangs props/lights/gestures off of.
+ * Real GLTF geometry with a proper skeleton — not primitive shapes, and not
+ * Kenney's blocky/voxel "Blocky Characters" kit either.
+ */
+function kitCharacter(
+  chars: CharacterAssets,
+  key: CharacterKey,
+  track: (g: THREE.BufferGeometry) => THREE.BufferGeometry,
+  mat: <T extends THREE.Material>(m: T) => T,
+  opts: { tint: number; roughness?: number; scale?: number | [number, number, number] },
+): CharacterRig {
+  const inner = SkeletonUtils.clone(chars.baseScene) as THREE.Group;
+  const s = opts.scale ?? 1;
+  if (Array.isArray(s)) inner.scale.set(s[0] * BASE_CHAR_SCALE, s[1] * BASE_CHAR_SCALE, s[2] * BASE_CHAR_SCALE);
+  else inner.scale.setScalar(s * BASE_CHAR_SCALE);
+
+  const bones: Partial<Record<string, THREE.Object3D>> = {};
+  let material: THREE.MeshStandardMaterial | null = null;
+  const skinTex = chars.skins[CHARACTER_SKIN[key]];
+
+  inner.traverse((o) => {
+    if (
+      o.name === "Head" ||
+      o.name === "Chest" ||
+      o.name === "LeftArm" ||
+      o.name === "RightArm" ||
+      o.name === "LeftForeArm" ||
+      o.name === "RightForeArm" ||
+      o.name === "LeftHand" ||
+      o.name === "RightHand"
+    ) {
+      bones[o.name] = o;
+    }
+    if ((o as THREE.Mesh).isMesh) {
+      const mesh = o as THREE.Mesh;
+      track(mesh.geometry);
+      if (!material) {
+        material = mat(
+          new THREE.MeshStandardMaterial({
+            map: skinTex,
+            color: opts.tint,
+            roughness: opts.roughness ?? 0.94,
+            metalness: 0.02,
+            fog: true,
+          }),
+        );
+      }
+      mesh.material = material;
+    }
+  });
+
+  const head = bones.Head;
+  const torso = bones.Chest;
+  const armL = bones.LeftArm;
+  const armR = bones.RightArm;
+  const foreArmL = bones.LeftForeArm;
+  const foreArmR = bones.RightForeArm;
+  const handL = bones.LeftHand;
+  const handR = bones.RightHand;
+  if (!head || !torso || !armL || !armR || !foreArmL || !foreArmR || !handL || !handR) {
+    throw new Error("character GLB is missing an expected rig bone");
+  }
+
+  const outer = new THREE.Group();
+  outer.add(inner);
+
+  const mixer = new THREE.AnimationMixer(inner);
+  const idle = THREE.AnimationClip.findByName(chars.clips, "idle");
+  if (idle) mixer.clipAction(idle).play();
+
+  return { outer, head, torso, armL, armR, foreArmL, foreArmR, handL, handR, mixer };
+}
+
 export type Viewmodel = {
   root: THREE.Group;
   carry: THREE.Group;
@@ -236,6 +341,14 @@ export type Viewmodel = {
   steam: THREE.Sprite[];
   noodles: THREE.Mesh[];
   noodleRest: { pos: THREE.Vector3; rot: THREE.Euler }[];
+};
+
+export type LampLight = {
+  point: THREE.PointLight;
+  spot: THREE.SpotLight;
+  z: number;
+  pointIntensity: number;
+  spotIntensity: number;
 };
 
 export type World = {
@@ -250,11 +363,19 @@ export type World = {
   monsterArms: THREE.Object3D[];
   house: THREE.Group;
   porchLight: THREE.PointLight;
+  wrongHouse: THREE.Group;
+  wrongHouseLight: THREE.PointLight;
   scareFace: THREE.Group;
   bushHands: THREE.Group;
   glimpse: THREE.Group;
+  otherWalker: THREE.Group;
+  otherWalkerHead: THREE.Object3D;
+  namePosts: THREE.Group;
+  offerings: THREE.Group;
+  lampLights: LampLight[];
   lampDying: THREE.PointLight;
   fireflies: THREE.Points;
+  mixers: THREE.AnimationMixer[];
   viewmodel: Viewmodel;
   flashlight: THREE.SpotLight;
   fogTime: { value: number };
@@ -262,10 +383,178 @@ export type World = {
   mats: THREE.Material[];
 };
 
-export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameArt): World {
+/** Reusable night-house builder — the real destination and the decoy
+ * "wrong house" both come out of this, per the plan's house remodel. */
+function buildHouse(
+  track: (g: THREE.BufferGeometry) => THREE.BufferGeometry,
+  mat: <T extends THREE.Material>(m: T) => T,
+  plankTex: THREE.Texture,
+  shingleTex: THREE.Texture,
+  opts: { warm: boolean; silhouette: boolean; withYard: boolean },
+) {
+  const group = new THREE.Group();
+  const W = 6.2;
+  const D = 6.2;
+  const wallH = 4.0;
+  const rise = 2.4;
+  const eaveY = wallH + 0.32; // + foundation
+
+  const wallM = mat(
+    new THREE.MeshStandardMaterial({
+      map: plankTex,
+      color: opts.warm ? 0x8a8272 : 0x5c5c60,
+      roughness: 0.9,
+    }),
+  );
+  const trimM = mat(
+    new THREE.MeshStandardMaterial({ color: opts.warm ? 0x241e16 : 0x1c1c1e, roughness: 0.85, flatShading: true }),
+  );
+  const roofM = mat(
+    new THREE.MeshStandardMaterial({ map: shingleTex, color: opts.warm ? 0x9a9284 : 0x6a6a70, roughness: 0.92 }),
+  );
+  const glowM = mat(
+    new THREE.MeshStandardMaterial({
+      color: opts.warm ? 0x6a3a12 : 0x1c2430,
+      emissive: opts.warm ? 0x6a380c : 0x223040,
+      emissiveIntensity: opts.warm ? 0.85 : 0.3,
+      flatShading: true,
+    }),
+  );
+
+  const foundation = new THREE.Mesh(track(new THREE.BoxGeometry(W + 0.4, 0.32, D + 0.4)), trimM);
+  foundation.position.y = 0.16;
+  const wall = new THREE.Mesh(track(new THREE.BoxGeometry(W, wallH, D)), wallM);
+  wall.position.y = 0.32 + wallH / 2;
+  group.add(foundation, wall);
+
+  // Gable roof — two sloped pitches meeting at a ridge, plus a flat front
+  // gable-end panel (the only face the player ever really sees head-on).
+  const theta = Math.atan2(rise, W / 2 + 0.5);
+  const slopeLen = Math.hypot(W / 2 + 0.5, rise);
+  const pitchGeo = track(new THREE.BoxGeometry(slopeLen, 0.1, D + 0.8));
+  const pitchL = new THREE.Mesh(pitchGeo, roofM);
+  pitchL.position.set(-(W / 4 + 0.25), eaveY + rise / 2, 0);
+  pitchL.rotation.z = theta;
+  const pitchR = new THREE.Mesh(pitchGeo, roofM);
+  pitchR.position.set(W / 4 + 0.25, eaveY + rise / 2, 0);
+  pitchR.rotation.z = -theta;
+  group.add(pitchL, pitchR);
+
+  const gableShape = new THREE.Shape();
+  gableShape.moveTo(-W / 2, 0);
+  gableShape.lineTo(W / 2, 0);
+  gableShape.lineTo(0, rise);
+  gableShape.closePath();
+  const gableFront = new THREE.Mesh(track(new THREE.ShapeGeometry(gableShape)), wallM);
+  gableFront.position.set(0, eaveY, D / 2 - 0.02);
+  group.add(gableFront);
+
+  const chimney = new THREE.Mesh(track(new THREE.BoxGeometry(0.55, 1.9, 0.55)), trimM);
+  chimney.position.set(1.7, eaveY + rise * 0.55 + 0.9, -0.9);
+  group.add(chimney);
+
+  // Porch: raised deck, steps down to the road, posts + railing.
+  const porchDepth = 1.7;
+  const porchY = 0.42;
+  const deck = new THREE.Mesh(track(new THREE.BoxGeometry(W * 0.72, 0.12, porchDepth)), trimM);
+  deck.position.set(0, porchY, D / 2 + porchDepth / 2);
+  group.add(deck);
+  for (let s = 0; s < 3; s++) {
+    const step = new THREE.Mesh(track(new THREE.BoxGeometry(W * 0.5, 0.1, 0.32)), trimM);
+    step.position.set(0, porchY - 0.12 - s * 0.12, D / 2 + porchDepth + 0.16 + s * 0.32);
+    group.add(step);
+  }
+  const postGeo = track(new THREE.CylinderGeometry(0.06, 0.06, 2.1, 8));
+  const railGeo = track(new THREE.BoxGeometry(0.05, 0.05, porchDepth - 0.1));
+  for (const side of [-1, 1]) {
+    const post = new THREE.Mesh(postGeo, trimM);
+    post.position.set(side * (W * 0.32), porchY + 1.05, D / 2 + porchDepth - 0.15);
+    group.add(post);
+    const rail = new THREE.Mesh(railGeo, trimM);
+    rail.position.set(side * (W * 0.32), porchY + 0.45, D / 2 + porchDepth / 2 - 0.05);
+    group.add(rail);
+  }
+  const canopy = new THREE.Mesh(track(new THREE.BoxGeometry(W * 0.78, 0.08, porchDepth + 0.3)), roofM);
+  canopy.position.set(0, porchY + 2.05, D / 2 + porchDepth / 2);
+  group.add(canopy);
+
+  // Door + frame.
+  const doorFrame = new THREE.Mesh(track(new THREE.BoxGeometry(1.3, 2.5, 0.12)), trimM);
+  doorFrame.position.set(0, porchY + 1.35, D / 2 + 0.02);
+  const door = new THREE.Mesh(track(new THREE.PlaneGeometry(0.95, 2.15)), glowM);
+  door.position.set(0, porchY + 1.28, D / 2 + 0.09);
+  group.add(doorFrame, door);
+
+  // Windows with sills; the destination gets a standing silhouette in one.
+  const winFrame = track(new THREE.BoxGeometry(1.05, 1.05, 0.14));
+  const winGlow = track(new THREE.PlaneGeometry(0.82, 0.82));
+  const sillGeo = track(new THREE.BoxGeometry(1.2, 0.08, 0.16));
+  const winX = [-1.95, 1.95];
+  for (let i = 0; i < winX.length; i++) {
+    const x = winX[i];
+    const f = new THREE.Mesh(winFrame, trimM);
+    f.position.set(x, eaveY - 1.15, D / 2 + 0.02);
+    const p = new THREE.Mesh(winGlow, glowM);
+    p.position.set(x, eaveY - 1.15, D / 2 + 0.1);
+    const sill = new THREE.Mesh(sillGeo, trimM);
+    sill.position.set(x, eaveY - 1.7, D / 2 + 0.08);
+    group.add(f, p, sill);
+    if (opts.silhouette && i === 0) {
+      const silTex = makeSilhouette((ctx, w, h) => {
+        ctx.fillStyle = "#0a0806";
+        ctx.beginPath();
+        ctx.ellipse(w * 0.5, h * 0.28, w * 0.16, h * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(w * 0.3, h * 0.42, w * 0.4, h * 0.6);
+      }, 96, 128);
+      const silM = mat(
+        new THREE.MeshBasicMaterial({ map: silTex, transparent: true, alphaTest: 0.4, fog: true }),
+      );
+      const sil = new THREE.Mesh(track(new THREE.PlaneGeometry(0.62, 0.78)), silM);
+      sil.position.set(x, eaveY - 1.18, D / 2 + 0.06);
+      group.add(sil);
+    }
+  }
+
+  // Mailbox + short path + one yard tree (destination only).
+  if (opts.withYard) {
+    const mailPostM = stdMat(mat, 0x2a241c, { roughness: 0.7 });
+    const mailBoxM = stdMat(mat, 0x3a4a3a, { roughness: 0.6, metalness: 0.15 });
+    const post = new THREE.Mesh(track(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6)), mailPostM);
+    post.position.set(-2.6, 0.45, D / 2 + porchDepth + 1.4);
+    const box = new THREE.Mesh(track(new THREE.CapsuleGeometry(0.12, 0.22, 3, 8)), mailBoxM);
+    box.rotation.z = Math.PI / 2;
+    box.position.set(-2.6, 0.92, D / 2 + porchDepth + 1.4);
+    group.add(post, box);
+    const pathM = mat(new THREE.MeshStandardMaterial({ color: 0x6a6258, roughness: 0.95 }));
+    const path = new THREE.Mesh(track(new THREE.PlaneGeometry(1.1, porchDepth + 1.6)), pathM);
+    path.rotation.x = -Math.PI / 2;
+    path.position.set(0, 0.005, D / 2 + porchDepth + 0.8);
+    group.add(path);
+  }
+
+  const porchLight = new THREE.PointLight(
+    opts.warm ? 0xffb060 : 0x8098c0,
+    opts.warm ? 6 : WRONG_HOUSE_LIGHT_INTENSITY,
+    opts.warm ? 18 : 10,
+    1.6,
+  );
+  porchLight.position.set(0, porchY + 2, D / 2 + porchDepth * 0.6);
+  group.add(porchLight);
+
+  const fixtureM = stdMat(mat, 0x18140f, { roughness: 0.5, metalness: 0.4 });
+  const fixture = new THREE.Mesh(track(new THREE.CylinderGeometry(0.08, 0.1, 0.16, 8)), fixtureM);
+  fixture.position.set(0, porchY + 1.95, D / 2 + porchDepth * 0.55);
+  group.add(fixture);
+
+  return { group, porchLight };
+}
+
+export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameArt, chars: CharacterAssets): World {
   const rng = mulberry32(0x5a1e);
   const geos: THREE.BufferGeometry[] = [];
   const mats: THREE.Material[] = [];
+  const mixers: THREE.AnimationMixer[] = [];
   const track = (g: THREE.BufferGeometry) => (geos.push(g), g);
   const mat = <T extends THREE.Material>(m: T) => (mats.push(m), m);
 
@@ -314,40 +603,41 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     new THREE.MeshStandardMaterial({ color: 0x564636, roughness: 0.78, flatShading: true }),
   );
 
-  const ground = new THREE.Mesh(track(new THREE.PlaneGeometry(280, 1600)), groundMat);
+  const ground = new THREE.Mesh(track(new THREE.PlaneGeometry(280, 1900)), groundMat);
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0, -0.04, -700);
+  ground.position.set(0, -0.04, -825);
   scene.add(ground);
 
-  const road = new THREE.Mesh(track(new THREE.PlaneGeometry(8.4, 800)), roadMat);
+  const ROAD_Z = -580;
+  const road = new THREE.Mesh(track(new THREE.PlaneGeometry(8.4, 1500)), roadMat);
   road.rotation.x = -Math.PI / 2;
-  road.position.set(0, 0, -380);
+  road.position.set(0, 0, ROAD_Z);
   scene.add(road);
-  const stripe = new THREE.Mesh(track(new THREE.PlaneGeometry(0.11, 760)), trackMat);
+  const stripe = new THREE.Mesh(track(new THREE.PlaneGeometry(0.11, 1460)), trackMat);
   stripe.rotation.x = -Math.PI / 2;
-  stripe.position.set(0, 0.012, -380);
+  stripe.position.set(0, 0.012, ROAD_Z);
   scene.add(stripe);
-  const shoulderL = new THREE.Mesh(track(new THREE.PlaneGeometry(2.2, 800)), dirtMat);
+  const shoulderL = new THREE.Mesh(track(new THREE.PlaneGeometry(2.2, 1500)), dirtMat);
   shoulderL.rotation.x = -Math.PI / 2;
-  shoulderL.position.set(-5.1, 0.006, -380);
+  shoulderL.position.set(-5.1, 0.006, ROAD_Z);
   scene.add(shoulderL);
   const shoulderR = shoulderL.clone();
   shoulderR.position.x = 5.1;
   scene.add(shoulderR);
 
-  // Railings — posts + two rails, both sides
+  // Railings — posts + two rails, both sides. Extended to the new road length.
   const postGeo = track(new THREE.BoxGeometry(0.11, 1.15, 0.11));
   const railGeo = track(new THREE.BoxGeometry(0.07, 0.055, 2.8));
-  const postCount = 560;
+  const postCount = 950;
   const posts = new THREE.InstancedMesh(postGeo, railDark, postCount);
-  const railCount = 1100;
+  const railCount = 1900;
   const rails = new THREE.InstancedMesh(railGeo, railMat, railCount);
   const dummy = new THREE.Object3D();
   let pi = 0;
   let ri = 0;
   for (const side of [-1, 1]) {
     const x = side * 4.25;
-    for (let z = 52; z > -720 && pi < postCount; z -= 2.8) {
+    for (let z = 52; z > -1250 && pi < postCount; z -= 2.8) {
       dummy.position.set(x, 0.52, z);
       dummy.rotation.set(0, 0, 0);
       dummy.scale.set(1, 1, 1);
@@ -404,7 +694,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     return mesh;
   }
 
-  scatterCards(treeMat, 980, (d, i) => {
+  scatterCards(treeMat, 1650, (d, i) => {
     const side = i % 2 === 0 ? -1 : 1;
     const row = i % 8;
     d.position.set(
@@ -417,25 +707,25 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     d.rotation.y = rng() * Math.PI;
   }, 2);
 
-  scatterCards(fernMat, 1600, (d) => {
+  scatterCards(fernMat, 2550, (d) => {
     const side = rng() > 0.5 ? 1 : -1;
-    d.position.set(side * rand(rng, 4.38, 8.8), 0, rand(rng, 46, -730));
+    d.position.set(side * rand(rng, 4.38, 8.8), 0, rand(rng, 46, -1250));
     const h = rand(rng, 0.65, 1.75);
     d.scale.set(h * 1.05, h, 1);
     d.rotation.y = rng() * Math.PI;
   }, 2);
 
-  scatterCards(bushMat, 640, (d) => {
+  scatterCards(bushMat, 1050, (d) => {
     const side = rng() > 0.5 ? 1 : -1;
-    d.position.set(side * rand(rng, 4.7, 10.5), 0, rand(rng, 44, -720));
+    d.position.set(side * rand(rng, 4.7, 10.5), 0, rand(rng, 44, -1250));
     const h = rand(rng, 1.15, 2.55);
     d.scale.set(h * 1.4, h, 1);
     d.rotation.y = rng() * Math.PI;
   }, 2);
 
-  scatterCards(grassMat, 2200, (d) => {
+  scatterCards(grassMat, 3500, (d) => {
     const side = rng() > 0.5 ? 1 : -1;
-    d.position.set(side * rand(rng, 4.32, 11.5), 0, rand(rng, 46, -730));
+    d.position.set(side * rand(rng, 4.32, 11.5), 0, rand(rng, 46, -1250));
     const h = rand(rng, 0.45, 1.25);
     d.scale.set(h * 1.25, h, 1);
     d.rotation.y = rng() * Math.PI;
@@ -664,10 +954,10 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   }
 
   const logGeo = track(new THREE.CylinderGeometry(0.12, 0.16, 2.4, 6));
-  const logs = new THREE.InstancedMesh(logGeo, barkMat, 70);
-  for (let i = 0; i < 70; i++) {
+  const logs = new THREE.InstancedMesh(logGeo, barkMat, 120);
+  for (let i = 0; i < 120; i++) {
     const side = i % 2 === 0 ? -1 : 1;
-    dummy.position.set(side * rand(rng, 5.4, 8.8), 0.14, rand(rng, 42, -700));
+    dummy.position.set(side * rand(rng, 5.4, 8.8), 0.14, rand(rng, 42, -1250));
     dummy.rotation.set(rand(rng, 0.1, 0.4), rng() * Math.PI, Math.PI / 2 + rand(rng, -0.2, 0.2));
     dummy.scale.set(rand(rng, 0.7, 1.3), rand(rng, 0.8, 1.4), rand(rng, 0.7, 1.2));
     dummy.updateMatrix();
@@ -690,10 +980,10 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   const rockMat = mat(
     new THREE.MeshStandardMaterial({ map: art.floor, color: 0x6a6660, roughness: 0.92, flatShading: true }),
   );
-  const rocks = new THREE.InstancedMesh(rockGeo, rockMat, 140);
-  for (let i = 0; i < 140; i++) {
+  const rocks = new THREE.InstancedMesh(rockGeo, rockMat, 230);
+  for (let i = 0; i < 230; i++) {
     const side = rng() > 0.5 ? 1 : -1;
-    dummy.position.set(side * rand(rng, 4.7, 10), 0.12, rand(rng, 38, -710));
+    dummy.position.set(side * rand(rng, 4.7, 10), 0.12, rand(rng, 38, -1250));
     dummy.rotation.set(rng() * 0.6, rng() * Math.PI, rng() * 0.4);
     const s = rand(rng, 0.5, 1.6);
     dummy.scale.set(s, s * rand(rng, 0.45, 0.8), s);
@@ -746,7 +1036,7 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     }),
   );
   const fogGeo = track(new THREE.PlaneGeometry(14, 3.4, 1, 1));
-  for (let i = 0; i < 95; i++) {
+  for (let i = 0; i < 175; i++) {
     const z = 5 - i * 7.2;
     const sheet = new THREE.Mesh(fogGeo, fogMat);
     sheet.position.set((i % 2 === 0 ? -1 : 1) * 1.35, 0.85 + (i % 3) * 0.22, z);
@@ -771,7 +1061,19 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     scene.add(low);
   }
 
-  // Street lamps
+  // Street lamps — Three r185 uses physical light units, so old intensities
+  // (~9.5) were candle-dim. Bumped to real streetlamp candela, plus a
+  // downward SpotLight per hood for a visible pool on the asphalt. Only the
+  // nearest handful stay lit at once (see engine.ts's per-frame pooling);
+  // the rest sit at intensity 0 / invisible until the player gets close.
+  const LAMP_POINT_INTENSITY = 230;
+  const LAMP_POINT_DISTANCE = 22;
+  const LAMP_POINT_DECAY = 2;
+  const LAMP_SPOT_INTENSITY = 340;
+  const LAMP_SPOT_DISTANCE = 15;
+  const LAMP_SPOT_ANGLE = THREE.MathUtils.degToRad(50);
+  const LAMP_SPOT_PENUMBRA = 0.55;
+
   const poleGeo = track(new THREE.CylinderGeometry(0.07, 0.1, 5.4, 6));
   const armGeo = track(new THREE.BoxGeometry(1.55, 0.07, 0.07));
   const lampMat = mat(
@@ -793,8 +1095,10 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   );
   const bulbGeo = track(new THREE.SphereGeometry(0.11, 8, 6));
   const hoodGeo = track(new THREE.ConeGeometry(0.22, 0.16, 6));
+  const lampLights: LampLight[] = [];
   let lampDying: THREE.PointLight | null = null;
-  for (let i = 0; i < 22; i++) {
+  const LAMP_COUNT = 45;
+  for (let i = 0; i < LAMP_COUNT; i++) {
     const z = -8 - i * 29;
     const side = i % 2 === 0 ? -1 : 1;
     const pole = new THREE.Mesh(poleGeo, lampMat);
@@ -810,13 +1114,39 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     bulb.position.set(side * 2.55, 5.02, z);
     scene.add(bulb);
     if (dead) continue;
-    const light = new THREE.PointLight(0xffd4a0, 9.5, 12.5, 1.65);
-    light.position.set(side * 2.55, 4.85, z);
-    scene.add(light);
+
+    const point = new THREE.PointLight(0xffd4a0, LAMP_POINT_INTENSITY, LAMP_POINT_DISTANCE, LAMP_POINT_DECAY);
+    point.position.set(side * 2.55, 4.85, z);
+    scene.add(point);
+
+    const spot = new THREE.SpotLight(
+      0xffdcae,
+      LAMP_SPOT_INTENSITY,
+      LAMP_SPOT_DISTANCE,
+      LAMP_SPOT_ANGLE,
+      LAMP_SPOT_PENUMBRA,
+      1.4,
+    );
+    spot.position.set(side * 2.55, 5.0, z);
+    const spotTarget = new THREE.Object3D();
+    spotTarget.position.set(side * 2.55, 0, z);
+    scene.add(spotTarget);
+    spot.target = spotTarget;
+    scene.add(spot);
+
     if (i === 7) {
-      lampDying = light;
-      light.intensity = 6.5;
+      lampDying = point;
+      point.intensity = LAMP_POINT_INTENSITY * 0.65;
+      point.visible = true;
+      spot.visible = true;
+      // The dying lamp is a dedicated narrative light (see engine.ts's
+      // blackout beat) — kept out of the generic distance pool below.
+      continue;
     }
+
+    point.visible = false;
+    spot.visible = false;
+    lampLights.push({ point, spot, z, pointIntensity: LAMP_POINT_INTENSITY, spotIntensity: LAMP_SPOT_INTENSITY });
   }
 
   {
@@ -832,23 +1162,42 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     const bulb = new THREE.Mesh(bulbGeo, bulbLit);
     bulb.position.set(side * 2.55, 5.02, z);
     scene.add(pole, arm, hood, bulb);
-    const light = new THREE.PointLight(0xffd4a0, 7.2, 11, 1.7);
-    light.position.set(side * 2.55, 4.85, z);
-    scene.add(light);
+    const point = new THREE.PointLight(0xffd4a0, LAMP_POINT_INTENSITY * 0.8, LAMP_POINT_DISTANCE * 0.85, 1.7);
+    point.position.set(side * 2.55, 4.85, z);
+    point.visible = false;
+    scene.add(point);
+    const spot = new THREE.SpotLight(
+      0xffdcae,
+      LAMP_SPOT_INTENSITY * 0.8,
+      LAMP_SPOT_DISTANCE,
+      LAMP_SPOT_ANGLE,
+      LAMP_SPOT_PENUMBRA,
+      1.4,
+    );
+    spot.position.set(side * 2.55, 5.0, z);
+    const spotTarget = new THREE.Object3D();
+    spotTarget.position.set(side * 2.55, 0, z);
+    scene.add(spotTarget);
+    spot.target = spotTarget;
+    spot.visible = false;
+    scene.add(spot);
+    lampLights.push({
+      point,
+      spot,
+      z,
+      pointIntensity: LAMP_POINT_INTENSITY * 0.8,
+      spotIntensity: LAMP_SPOT_INTENSITY * 0.8,
+    });
   }
 
-  // Sentinel — roadside watchman
-  const sentry = makePerson(track, mat, {
-    coat: 0x3e433c,
-    pants: 0x2c2e2a,
-    boot: 0x1a1714,
-    skin: 0x8d7b68,
-    hat: "peak",
-    hatColor: 0x2a2824,
-    scale: 1.08,
-  });
-  const mailbox = sentry.root;
-  const mailboxFlag = sentry.armR;
+  // Sentinel — roadside watchman, GLTF humanoid with the lantern + gold-eye
+  // reveal kept as attached Three.js props.
+  const sentinelRig = kitCharacter(chars, "sentinel", track, mat, { tint: 0x6a6a5c, roughness: 0.92, scale: 1.02 });
+  mixers.push(sentinelRig.mixer);
+  const mailbox = sentinelRig.outer;
+  // Forearm, not upper-arm: the upper-arm bone carries a big bind-pose twist,
+  // the forearm is near-identity so plain .rotation.x reads as a clean raise.
+  const mailboxFlag = sentinelRig.foreArmR;
   mailboxFlag.rotation.x = 0.35;
   const mailboxEyeMat = mat(
     new THREE.MeshStandardMaterial({
@@ -858,16 +1207,18 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
       roughness: 0.35,
     }),
   );
+  const mailboxEyeAnchor = neutralize(sentinelRig.head);
   const mailboxEye = new THREE.Group();
-  mailboxEye.position.set(0, 0.1, 0.13);
-  const sentryEyeGeo = track(new THREE.SphereGeometry(0.026, 10, 8));
+  // Offsets are in the head bone's own (large) native rig units — this rig's
+  // head is a big chibi-style head, not the old GLB's small cube.
+  mailboxEye.position.set(0, 0.42, 0.42);
+  const sentryEyeGeo = track(new THREE.SphereGeometry(0.06, 10, 8));
   const sentryEyeL = new THREE.Mesh(sentryEyeGeo, mailboxEyeMat);
-  sentryEyeL.position.set(-0.042, 0, 0);
+  sentryEyeL.position.set(-0.13, 0, 0);
   const sentryEyeR = sentryEyeL.clone();
-  sentryEyeR.position.x = 0.042;
+  sentryEyeR.position.x = 0.13;
   mailboxEye.add(sentryEyeL, sentryEyeR);
-  mailboxEye.scale.setScalar(0.01);
-  sentry.headPivot.add(mailboxEye);
+  mailboxEyeAnchor.add(mailboxEye);
   const lanternPole = stdMat(mat, 0x1c1a16, { roughness: 0.45, metalness: 0.35 });
   const lanternGlowM = mat(
     new THREE.MeshStandardMaterial({
@@ -884,48 +1235,41 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
   handle.position.y = 0.07;
   handle.rotation.x = Math.PI / 2;
   lantern.add(cage, pane, handle);
-  lantern.position.set(0.02, -0.74, 0.04);
-  sentry.armR.add(lantern);
+  // Held at the hand bone (stable, near-identity bind rotation), not the
+  // upper arm — small nudge down/forward from the palm.
+  lantern.position.set(0, -0.18, 0.14);
+  sentinelRig.handR.add(lantern);
   const lanternLight = new THREE.PointLight(0xffc070, 1.8, 4.5, 1.8);
-  lanternLight.position.set(0, -0.74, 0.04);
-  sentry.armR.add(lanternLight);
-  mailbox.position.set(-3.15, 0, -68);
+  lanternLight.position.copy(lantern.position);
+  sentinelRig.handR.add(lanternLight);
+  mailbox.position.set(-3.15, 0, -90);
   mailbox.rotation.y = Math.PI / 2;
   scene.add(mailbox);
 
-  // Watcher
-  const watch = makePerson(track, mat, {
-    coat: 0x141310,
-    pants: 0x0e0d0c,
-    boot: 0x090908,
-    skin: 0x2a2420,
-    hat: "brim",
-    hatColor: 0x0c0c0b,
-    voidFace: true,
-    scale: 1.14,
-  });
-  const stranger = watch.root;
-  const head = watch.headPivot;
-  stranger.position.set(1.4, 0, -148);
+  // Watcher — taller, paler, suit-coated.
+  const watcherRig = kitCharacter(chars, "watcher", track, mat, { tint: 0x383a42, roughness: 0.82, scale: 1.14 });
+  mixers.push(watcherRig.mixer);
+  const stranger = watcherRig.outer;
+  const strangerHead = watcherRig.head;
+  stranger.position.set(1.4, 0, -220);
   stranger.visible = false;
   scene.add(stranger);
 
-  // Hunger
-  const hunger = makePerson(track, mat, {
-    coat: 0x0a0908,
-    pants: 0x070706,
-    boot: 0x050504,
-    skin: 0x1a1210,
-    hat: "none",
-    voidFace: true,
-    gaunt: true,
-    scale: 1.72,
+  // Hunger — largest, darkest, wet, stretched-arm horror.
+  const hungerRig = kitCharacter(chars, "hunger", track, mat, {
+    tint: 0x281a16,
+    roughness: 0.5,
+    scale: 1.42,
   });
-  const monster = hunger.root;
-  hunger.armL.scale.set(1.15, 2.35, 1.15);
-  hunger.armR.scale.set(1.15, 2.35, 1.15);
-  const armL = hunger.armL;
-  const armR = hunger.armR;
+  mixers.push(hungerRig.mixer);
+  const monster = hungerRig.outer;
+  // Scaling the actual upper-arm BONE (not a decorative wrapper) is what
+  // makes this visibly stretch the skinned mesh — a real deformed reach.
+  hungerRig.armL.scale.set(1.1, 2.1, 1.1);
+  hungerRig.armR.scale.set(1.1, 2.1, 1.1);
+  // Forearms (near-identity bind rotation) drive the per-frame reach gesture.
+  const armL = hungerRig.foreArmL;
+  const armR = hungerRig.foreArmR;
   const eyeGlowM = mat(
     new THREE.MeshStandardMaterial({
       color: 0x9e2a22,
@@ -934,71 +1278,94 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
       roughness: 0.4,
     }),
   );
-  const hungerEyeGeo = track(new THREE.SphereGeometry(0.04, 10, 8));
+  const hungerEyeAnchor = neutralize(hungerRig.head);
+  const hungerEyeGeo = track(new THREE.SphereGeometry(0.1, 10, 8));
   const e1 = new THREE.Mesh(hungerEyeGeo, eyeGlowM);
-  e1.position.set(-0.05, 0.12, 0.12);
+  e1.position.set(-0.13, 0.25, 0.38);
   const e2 = e1.clone();
-  e2.position.x = 0.05;
+  e2.position.x = 0.13;
   const e3 = e1.clone();
-  e3.position.set(0, 0.2, 0.1);
+  e3.position.set(0, 0.5, 0.33);
   e3.scale.setScalar(0.7);
-  hunger.headPivot.add(e1, e2, e3);
-  const jaw = new THREE.Mesh(track(new THREE.BoxGeometry(0.12, 0.03, 0.08)), stdMat(mat, 0x1a1210, { roughness: 0.7 }));
-  jaw.position.set(0, 0.02, 0.12);
-  hunger.headPivot.add(jaw);
-  monster.position.set(0, 0, -470);
+  hungerEyeAnchor.add(e1, e2, e3);
+  const jaw = new THREE.Mesh(track(new THREE.BoxGeometry(0.3, 0.075, 0.2)), stdMat(mat, 0x1a1210, { roughness: 0.7 }));
+  jaw.position.set(0, 0.0, 0.38);
+  hungerEyeAnchor.add(jaw);
+  monster.position.set(0, 0, -640);
   monster.visible = false;
   scene.add(monster);
   const monsterGlow = new THREE.PointLight(0x9e2a22, 0, 10);
-  monsterGlow.position.set(0, 3.1, -468);
+  monsterGlow.position.set(0, 3.1, -638);
   scene.add(monsterGlow);
 
-  // House
-  const house = new THREE.Group();
-  const wallM = mat(
-    new THREE.MeshStandardMaterial({ color: 0x3a3228, roughness: 0.88, flatShading: true }),
+  // Wrong house first, since the real house reuses the same builder just
+  // below and both share the plank/shingle textures.
+  const plankTex = makePlankTexture();
+  const shingleTex = makeShingleTexture();
+
+  const wrongBuilt = buildHouse(track, mat, plankTex, shingleTex, {
+    warm: false,
+    silhouette: false,
+    withYard: false,
+  });
+  wrongBuilt.group.position.set(0, 0, WRONG_HOUSE_Z);
+  wrongBuilt.group.visible = false;
+  scene.add(wrongBuilt.group);
+
+  const houseBuilt = buildHouse(track, mat, plankTex, shingleTex, {
+    warm: true,
+    silhouette: true,
+    withYard: true,
+  });
+  houseBuilt.group.position.set(0, 0, HOUSE_Z);
+  scene.add(houseBuilt.group);
+  const house = houseBuilt.group;
+  const porchLight = houseBuilt.porchLight;
+  const wrongHouse = wrongBuilt.group;
+  const wrongHouseLight = wrongBuilt.porchLight;
+
+  // Name posts — a fence stretch with scratched names, ~110m-165m.
+  const namePosts = new THREE.Group();
+  const postWoodM = stdMat(mat, 0x2a2018, { roughness: 0.85 });
+  for (let i = 0; i < 9; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    const z = -112 - i * 6.4;
+    const post = new THREE.Mesh(track(new THREE.BoxGeometry(0.1, 0.9, 0.1)), postWoodM);
+    post.position.set(side * 4.35, 0.45, z);
+    namePosts.add(post);
+    const plaqueTex = makeNamePostTexture(0x1000 + i);
+    const plaqueM = mat(
+      new THREE.MeshStandardMaterial({ map: plaqueTex, roughness: 0.85, side: THREE.DoubleSide }),
+    );
+    const plaque = new THREE.Mesh(track(new THREE.PlaneGeometry(0.34, 0.24)), plaqueM);
+    plaque.position.set(side * (4.35 - side * 0.08), 0.62, z);
+    plaque.rotation.y = side * 0.5;
+    namePosts.add(plaque);
+  }
+  scene.add(namePosts);
+
+  // Offerings — empty bowls left on the shoulder, ~695m-760m. First hint
+  // that something has already been paid before The Other confirms it.
+  const offerings = new THREE.Group();
+  const offerBowlM = stdMat(mat, 0xd8c8ac, { roughness: 0.3 });
+  const stainM = mat(
+    new THREE.MeshStandardMaterial({ color: 0x1a1006, roughness: 0.95, transparent: true, opacity: 0.55 }),
   );
-  const trimM = mat(
-    new THREE.MeshStandardMaterial({ color: 0x2a241c, roughness: 0.86, flatShading: true }),
-  );
-  const roofM = mat(
-    new THREE.MeshStandardMaterial({ color: 0x221c16, roughness: 0.92, flatShading: true }),
-  );
-  const glowM = mat(
-    new THREE.MeshStandardMaterial({
-      color: 0x6a3a12,
-      emissive: 0x5a2e0c,
-      emissiveIntensity: 0.7,
-      flatShading: true,
-    }),
-  );
-  const foundation = new THREE.Mesh(track(new THREE.BoxGeometry(6.6, 0.32, 6.6)), trimM);
-  foundation.position.y = 0.16;
-  const wall = new THREE.Mesh(track(new THREE.BoxGeometry(6.1, 4.1, 6.1)), wallM);
-  wall.position.y = 2.3;
-  const roof = new THREE.Mesh(track(new THREE.ConeGeometry(5.4, 2.5, 4)), roofM);
-  roof.position.y = 5.55;
-  roof.rotation.y = Math.PI / 4;
-  const chimney = new THREE.Mesh(track(new THREE.BoxGeometry(0.55, 1.7, 0.55)), trimM);
-  chimney.position.set(1.7, 6.15, -0.9);
-  const door = new THREE.Mesh(track(new THREE.PlaneGeometry(1.15, 2.35)), glowM);
-  door.position.set(0, 1.4, 3.08);
-  const win = (x: number) => {
-    const f = new THREE.Mesh(track(new THREE.BoxGeometry(1.05, 1.05, 0.1)), trimM);
-    f.position.set(x, 2.65, 3.05);
-    const p = new THREE.Mesh(track(new THREE.PlaneGeometry(0.82, 0.82)), glowM);
-    p.position.set(x, 2.65, 3.12);
-    house.add(f, p);
-  };
-  house.add(foundation, wall, roof, chimney, door);
-  win(-1.85);
-  win(1.85);
-  house.scale.setScalar(1.28);
-  house.position.set(0, 0, HOUSE_Z);
-  scene.add(house);
-  const porchLight = new THREE.PointLight(0xffb060, 6, 18, 1.6);
-  porchLight.position.set(0, 3.2, HOUSE_Z + 5);
-  scene.add(porchLight);
+  const offerBowlGeo = track(new THREE.SphereGeometry(0.11, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62));
+  const stainGeo = track(new THREE.CircleGeometry(0.24, 16));
+  for (let i = 0; i < 6; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    const z = -696 - i * 12;
+    const stain = new THREE.Mesh(stainGeo, stainM);
+    stain.rotation.x = -Math.PI / 2;
+    stain.position.set(side * rand(rng, 4.6, 6.4), 0.008, z);
+    offerings.add(stain);
+    const bowl = new THREE.Mesh(offerBowlGeo, offerBowlM);
+    bowl.rotation.x = Math.PI;
+    bowl.position.set(stain.position.x + rand(rng, -0.15, 0.15), 0.1, z + rand(rng, -0.15, 0.15));
+    offerings.add(bowl);
+  }
+  scene.add(offerings);
 
   // Scare face
   const scareFace = new THREE.Group();
@@ -1049,32 +1416,42 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     arm.position.x = side * 0.18;
     bushHands.add(arm);
   }
-  bushHands.position.set(4.4, 0, -338);
+  bushHands.position.set(4.4, 0, -507);
   bushHands.visible = false;
   scene.add(bushHands);
 
-  const glimp = makePerson(track, mat, {
-    coat: 0x0c0c0c,
-    pants: 0x090909,
-    boot: 0x060606,
-    skin: 0x161412,
-    hat: "none",
-    voidFace: true,
-    gaunt: true,
-    scale: 1.06,
+  const glimpseRig = kitCharacter(chars, "glimpse", track, mat, {
+    tint: 0x121212,
+    roughness: 1,
+    scale: [0.92, 1.05, 0.92],
   });
-  const glimpse = glimp.root;
-  glimpse.position.set(7.4, 0, -358);
+  mixers.push(glimpseRig.mixer);
+  const glimpse = glimpseRig.outer;
+  glimpse.position.set(7.4, 0, -495);
   glimpse.visible = false;
   scene.add(glimpse);
 
+  // The Other — a figure walking the opposite way, tray empty.
+  const otherRig = kitCharacter(chars, "other", track, mat, { tint: 0x5c4a38, roughness: 0.9, scale: 1.0 });
+  mixers.push(otherRig.mixer);
+  const otherWalker = otherRig.outer;
+  const otherWalkerHead = otherRig.head;
+  const otherTrayM = stdMat(mat, 0x3a281a, { roughness: 0.75 });
+  const otherTray = new THREE.Mesh(track(new THREE.BoxGeometry(0.46, 0.02, 0.3)), otherTrayM);
+  otherTray.position.set(0, 0.9, 0.24);
+  otherWalker.add(otherTray);
+  otherWalker.position.set(-1.1, 0, -900);
+  otherWalker.rotation.y = Math.PI;
+  otherWalker.visible = false;
+  scene.add(otherWalker);
+
   // Fireflies
-  const fireflyCount = 70;
+  const fireflyCount = 90;
   const fPos = new Float32Array(fireflyCount * 3);
   for (let i = 0; i < fireflyCount; i++) {
     fPos[i * 3] = (rng() - 0.5) * 36;
     fPos[i * 3 + 1] = 0.4 + rng() * 3.4;
-    fPos[i * 3 + 2] = rand(rng, 38, -700);
+    fPos[i * 3 + 2] = rand(rng, 38, -1250);
   }
   const fGeo = track(new THREE.BufferGeometry());
   fGeo.setAttribute("position", new THREE.BufferAttribute(fPos, 3));
@@ -1108,17 +1485,25 @@ export function buildWorld(scene: THREE.Scene, camera: THREE.Camera, art: GameAr
     mailboxEye,
     mailboxEyeMat,
     stranger,
-    strangerHead: head,
+    strangerHead,
     monster,
     monsterGlow,
     monsterArms: [armL, armR],
     house,
     porchLight,
+    wrongHouse,
+    wrongHouseLight,
     scareFace,
     bushHands,
     glimpse,
+    otherWalker,
+    otherWalkerHead,
+    namePosts,
+    offerings,
+    lampLights,
     lampDying: lampDying ?? new THREE.PointLight(0x000000, 0),
     fireflies,
+    mixers,
     viewmodel,
     flashlight,
     fogTime,

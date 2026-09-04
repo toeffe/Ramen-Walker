@@ -180,10 +180,14 @@ export class GameAudio {
     this.applyBeds();
   }
 
-  speak(file: string) {
+  /** Plays a voice line. Returns true if a real audio file was found and
+   * playback was attempted (in which case onEnded fires once it finishes
+   * or errors out); returns false immediately if there's no audio for this
+   * line, so callers can fall back to a text-timed auto-advance. */
+  speak(file: string, onEnded?: () => void): boolean {
     this.stopSpeak();
     const url = voiceUrl(file);
-    if (!url) return;
+    if (!url) return false;
     const a = new Audio(url);
     a.preload = "auto";
     this.voice = a;
@@ -194,10 +198,12 @@ export class GameAudio {
       this.voice = null;
       this.voiceDuck = false;
       this.applyBeds();
+      onEnded?.();
     };
     a.addEventListener("ended", done);
     a.addEventListener("error", done);
     void a.play().catch(done);
+    return true;
   }
 
   stopSpeak() {

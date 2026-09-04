@@ -1,8 +1,16 @@
 import * as THREE from "three";
 import { GameAudio } from "@/game/audio";
 import { useGame } from "@/game/store";
-import { buildWorld, disposeWorld, HOUSE_Z, ROAD_HALF, type World } from "@/game/world";
+import {
+  buildWorld,
+  disposeWorld,
+  HOUSE_Z,
+  ROAD_HALF,
+  WRONG_HOUSE_LIGHT_INTENSITY,
+  type World,
+} from "@/game/world";
 import { disposeArt, type GameArt } from "@/game/art";
+import type { CharacterAssets } from "@/game/characters";
 import {
   getLine,
   RAMEN_ASIDES,
@@ -27,10 +35,15 @@ declare global {
 }
 
 type StoryEvent = { distance: number; triggered?: boolean; run: () => void };
-type HoldKind = "sentinel" | "watcher" | "hunger";
+type HoldKind = "sentinel" | "watcher" | "hunger" | "other" | "watcher2";
 type QueuedLine = { id: LineId; after?: () => void; event?: HoldKind };
 
 const HOLD_LEAVE_DIST = 14;
+// How long (seconds) the camera is force-turned toward a talking NPC before
+// control is handed back to the player. Dialogue keeps auto-advancing either
+// way; this just stops the whole multi-line conversation from locking the
+// camera for its entire length.
+const HOLD_LOOK_LOCK_S = 2.6;
 
 export class RamenGame {
   private renderer: THREE.WebGLRenderer;
@@ -93,20 +106,29 @@ export class RamenGame {
   private fullText = "";
   private after: (() => void) | null = null;
   private lineEvent: HoldKind | null = null;
+  private autoAdvanceTimer: number | null = null;
+  private dialogueGen = 0;
   private events: StoryEvent[] = [];
   private seenBack = false;
   private mailboxArmed = false;
   private lampKilled = false;
   private hold: HoldKind | null = null;
   private holdGrace = 0;
+  private holdLookElapsed = 0;
   private metSentinel = false;
   private metWatcher = false;
   private metHunger = false;
+  private metOther = false;
+  private metWatcher2 = false;
   private houseTalked = false;
-  private hungerFrom = new THREE.Vector3(0, 0, -470);
+  /** How many times the walk has restarted after a jumpscare-death. Zero on
+   * the very first walk — `ramen_here_again` (the loop confirmation line)
+   * only fires once this is > 0, so the game doesn't spoil the loop before
+   * the player has actually looped. */
+  private loopCount = 0;
+  private hungerFrom = new THREE.Vector3(0, 0, -640);
   private crossing = false;
   private crossingT = 0;
-  private falsePorch = 0;
   private bowlHeavy = 0;
   private glimpseUntil = 0;
   private trayDamage = 0;
@@ -126,6 +148,7 @@ export class RamenGame {
   constructor(
     private canvas: HTMLCanvasElement,
     art: GameArt,
+    chars: CharacterAssets,
   ) {
     this.art = art;
     this.scene = new THREE.Scene();
@@ -158,7 +181,7 @@ export class RamenGame {
     moon.position.set(-18, 28, 8);
     this.scene.add(moon);
 
-    this.world = buildWorld(this.scene, this.camera, art);
+    this.world = buildWorld(this.scene, this.camera, art, chars);
     this.buildStory();
     this.bind();
     this.installProbe();
@@ -324,6 +347,19 @@ export class RamenGame {
       useGame.getState().setDialogue({ speaker: st.dialogue.speaker, text: this.fullText, complete: true });
       return;
     }
+    this.completeLine();
+  }
+
+  /** Finishes the current line and moves to the next queued one. Called
+   * both by manual advance (Space/Enter/tap) and automatically once a
+   * line's voice audio ends (or, for lines with no recorded audio yet,
+   * after a text-timed delay) — dialogue has no on-screen text anymore, so
+   * it can't rely on the player reading a "press to continue" prompt. */
+  private completeLine() {
+    if (this.autoAdvanceTimer !== null) {
+      window.clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
     this.audio.stopSpeak();
     const cb = this.after;
     this.after = null;
@@ -351,6 +387,11 @@ export class RamenGame {
       window.clearInterval(this.typing);
       this.typing = null;
     }
+    if (this.autoAdvanceTimer !== null) {
+      window.clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
+    this.dialogueGen++;
     this.dialogueQ = [];
     this.after = null;
     this.lineEvent = null;
@@ -380,10 +421,16 @@ export class RamenGame {
   }
 
   private resetRun() {
+    this.loopCount++;
     if (this.typing) {
       window.clearInterval(this.typing);
       this.typing = null;
     }
+    if (this.autoAdvanceTimer !== null) {
+      window.clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
+    this.dialogueGen++;
     this.dialogueQ = [];
     this.audio.stopSpeak();
     this.after = null;
@@ -442,11 +489,12 @@ export class RamenGame {
     this.metSentinel = false;
     this.metWatcher = false;
     this.metHunger = false;
+    this.metOther = false;
+    this.metWatcher2 = false;
     this.houseTalked = false;
-    this.hungerFrom.set(0, 0, -470);
+    this.hungerFrom.set(0, 0, -640);
     this.crossing = false;
     this.crossingT = 0;
-    this.falsePorch = 0;
     this.bowlHeavy = 0;
     this.glimpseUntil = 0;
     this.trayDamage = Math.min(1, this.trayDamage * 0.72 + 0.1);
@@ -456,28 +504,31 @@ export class RamenGame {
     for (const ev of this.events) ev.triggered = false;
 
     const w = this.world;
-    w.mailbox.position.set(-3.15, 0, -68);
+    w.mailbox.position.set(-3.15, 0, -90);
     w.mailbox.rotation.set(0, Math.PI / 2, 0);
     w.mailboxFlag.rotation.x = 0.35;
     w.mailboxEye.scale.setScalar(0.01);
     w.mailboxEyeMat.emissiveIntensity = 0;
     w.stranger.visible = false;
-    w.stranger.position.set(1.4, 0, -148);
+    w.stranger.position.set(1.4, 0, -220);
     w.monster.visible = false;
-    w.monster.position.set(0, 0, -470);
+    w.monster.position.set(0, 0, -640);
     w.monster.rotation.set(0, 0, 0);
-    w.monster.scale.setScalar(1.72);
     w.monsterGlow.intensity = 0;
-    w.monsterGlow.position.set(0, 3.1, -468);
+    w.monsterGlow.position.set(0, 3.1, -638);
     w.monsterArms[0].rotation.set(0, 0, -0.12);
     w.monsterArms[1].rotation.set(0, 0, 0.12);
     w.scareFace.visible = false;
     w.scareFace.scale.setScalar(1);
     w.viewmodel.carry.visible = true;
     w.bushHands.visible = false;
-    w.bushHands.position.set(4.4, 0, -338);
+    w.bushHands.position.set(4.4, 0, -507);
     w.glimpse.visible = false;
-    w.glimpse.position.set(7.4, 0, -358);
+    w.glimpse.position.set(7.4, 0, -495);
+    w.otherWalker.visible = false;
+    w.otherWalker.position.set(-1.1, 0, -900);
+    w.wrongHouse.visible = false;
+    w.wrongHouseLight.intensity = WRONG_HOUSE_LIGHT_INTENSITY;
     w.lampDying.intensity = 5;
 
     const vm = w.viewmodel;
@@ -532,7 +583,25 @@ export class RamenGame {
     this.after = entry.after ?? null;
     this.lineEvent = entry.event ?? null;
     this.fullText = line.text;
-    this.audio.speak(line.file);
+    if (this.autoAdvanceTimer !== null) {
+      window.clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
+    const gen = ++this.dialogueGen;
+    const hasAudio = this.audio.speak(line.file, () => {
+      if (gen !== this.dialogueGen) return;
+      this.completeLine();
+    });
+    if (!hasAudio) {
+      // No recorded audio yet for this line — auto-advance after a
+      // text-timed pause instead of waiting on player input forever.
+      const delay = Math.min(6000, Math.max(900, line.text.length * 45));
+      this.autoAdvanceTimer = window.setTimeout(() => {
+        if (gen !== this.dialogueGen) return;
+        this.autoAdvanceTimer = null;
+        this.completeLine();
+      }, delay);
+    }
     useGame.getState().setDialogue({ speaker: line.speaker, text: "", complete: false });
     let i = 0;
     if (this.typing) window.clearInterval(this.typing);
@@ -570,12 +639,14 @@ export class RamenGame {
   private beginHold(kind: HoldKind) {
     this.hold = kind;
     this.holdGrace = 0.45;
+    this.holdLookElapsed = 0;
   }
 
   private holdSpeakerPos() {
     if (this.hold === "sentinel") return this.world.mailbox.position;
-    if (this.hold === "watcher") return this.world.stranger.position;
+    if (this.hold === "watcher" || this.hold === "watcher2") return this.world.stranger.position;
     if (this.hold === "hunger") return this.world.monster.position;
+    if (this.hold === "other") return this.world.otherWalker.position;
     return null;
   }
 
@@ -601,6 +672,11 @@ export class RamenGame {
         window.clearInterval(this.typing);
         this.typing = null;
       }
+      if (this.autoAdvanceTimer !== null) {
+        window.clearTimeout(this.autoAdvanceTimer);
+        this.autoAdvanceTimer = null;
+      }
+      this.dialogueGen++;
       this.audio.stopSpeak();
       this.after = null;
       this.fullText = "";
@@ -618,7 +694,15 @@ export class RamenGame {
   private releaseHold() {
     if (this.hold === "watcher") {
       this.world.stranger.visible = false;
-      this.world.stranger.position.set(1.4, 0, -148);
+      this.world.stranger.position.set(1.4, 0, -220);
+    }
+    if (this.hold === "watcher2") {
+      this.world.stranger.visible = false;
+      this.world.stranger.position.set(1.4, 0, -220);
+    }
+    if (this.hold === "other") {
+      this.world.otherWalker.visible = false;
+      this.world.otherWalker.position.set(-1.1, 0, -900);
     }
     if (this.hold === "hunger") {
       this.hungerFrom.copy(this.world.monster.position);
@@ -680,20 +764,65 @@ export class RamenGame {
     }, "hunger");
   }
 
+  private startOther() {
+    this.beginHold("other");
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const z = this.yawObject.position.z - 7;
+    this.world.otherWalker.visible = true;
+    this.world.otherWalker.position.set(side * 1.3, 0, z);
+    this.say("other_evening", undefined, "other");
+    this.say("you_other_hello", undefined, "other");
+    this.say("other_empty", undefined, "other");
+    this.say("you_other_where", undefined, "other");
+    this.say("other_no_wrong_way", undefined, "other");
+    this.say("ramen_dont_ask", undefined, "other");
+    this.say("other_she_talks", undefined, "other");
+    this.say("you_first_time", undefined, "other");
+    this.say("other_lost_count", undefined, "other");
+    this.say("ramen_walk_now", undefined, "other");
+    this.say("other_see_you_again", () => {
+      this.releaseHold();
+      this.say("you_other_aftershock");
+    }, "other");
+  }
+
+  private startWatcher2() {
+    this.beginHold("watcher2");
+    this.world.stranger.visible = true;
+    this.world.stranger.position.set(1.4, 0, this.yawObject.position.z - 7);
+    this.say("watcher2_again", undefined, "watcher2");
+    this.say("you_watcher2_surprised", undefined, "watcher2");
+    this.say("watcher2_we_always", undefined, "watcher2");
+    this.say("watcher2_carrying_still", undefined, "watcher2");
+    this.say("you_watcher2_almost_home", undefined, "watcher2");
+    this.say("watcher2_almost", undefined, "watcher2");
+    this.say("ramen_ignore_him", undefined, "watcher2");
+    this.say("watcher2_farewell", () => {
+      this.releaseHold();
+    }, "watcher2");
+  }
+
   private startHouseTalk() {
     this.say("ramen_good");
     this.say("you_just_ramen");
     this.say("ramen_no_isnt");
+    this.say("ramen_names_kept");
+    this.say("you_home_final");
+    this.say("ramen_home_final");
   }
 
   private steerLookToSpeaker(dt: number) {
     if (!this.hold || this.grabbing) return;
+    this.holdLookElapsed += dt;
+    if (this.holdLookElapsed > HOLD_LOOK_LOCK_S) return;
     const target =
       this.hold === "sentinel"
         ? this.world.mailbox.position
-        : this.hold === "watcher"
+        : this.hold === "watcher" || this.hold === "watcher2"
           ? this.world.stranger.position
-          : this.world.monster.position;
+          : this.hold === "other"
+            ? this.world.otherWalker.position
+            : this.world.monster.position;
     const p = this.yawObject.position;
     const dx = target.x - p.x;
     const dz = target.z - p.z;
@@ -717,22 +846,30 @@ export class RamenGame {
   }
 
   private trayStrain() {
-    return THREE.MathUtils.clamp(this.distance / 620 * 0.62 + this.trayDamage * 0.95, 0, 1.28);
+    return THREE.MathUtils.clamp((this.distance / (-HOUSE_Z * 0.955)) * 0.62 + this.trayDamage * 0.95, 0, 1.28);
   }
 
   private updateEncounters() {
     const z = this.yawObject.position.z;
-    if (!this.metSentinel && z <= -60) {
+    if (!this.metSentinel && z <= -90) {
       this.metSentinel = true;
       this.startSentinel();
     }
-    if (!this.metWatcher && z <= -140 && !this.hold) {
+    if (!this.metWatcher && z <= -220 && !this.hold) {
       this.metWatcher = true;
       this.startWatcher();
     }
-    if (!this.metHunger && z <= -448 && !this.hold) {
+    if (!this.metHunger && z <= -640 && !this.hold) {
       this.metHunger = true;
       this.startHunger();
+    }
+    if (!this.metOther && z <= -900 && !this.hold) {
+      this.metOther = true;
+      this.startOther();
+    }
+    if (!this.metWatcher2 && z <= -1100 && !this.hold) {
+      this.metWatcher2 = true;
+      this.startWatcher2();
     }
     if (!this.houseTalked && z <= HOUSE_Z + 22 && !this.hold) {
       this.houseTalked = true;
@@ -745,28 +882,41 @@ export class RamenGame {
       z <= HOUSE_Z + 8 &&
       !this.talking()
     ) {
-      this.triggerEnding("home");
+      this.triggerEnding(this.trayDamage >= 0.85 ? "taken" : "home");
     }
   }
 
   private buildStory() {
     this.events = [
-      { distance: 6, run: () => this.say("you_later") },
-      { distance: 12, run: () => this.say(this.pick(YOU_ASIDES)) },
-      { distance: 16, run: () => this.say("you_warm") },
-      { distance: 22, run: () => this.say("you_count") },
+      // --- Act 1: mundane walk, sensory only, no lore (~0-80m, before the Sentinel@90) ---
       {
-        distance: 28,
+        distance: 4,
+        run: () => {
+          if (this.loopCount > 0) this.say("ramen_here_again");
+        },
+      },
+      { distance: 11, run: () => this.say("you_later") },
+      { distance: 22, run: () => this.say(this.pick(YOU_ASIDES)) },
+      { distance: 29, run: () => this.say("you_warm") },
+      { distance: 40, run: () => this.say("you_count") },
+      {
+        distance: 51,
         run: () => {
           this.say("ramen_dont_spill");
           this.audio.whisper();
         },
       },
-      { distance: 36, run: () => this.say("you_yeah") },
-      { distance: 40, run: () => this.say(this.pick(RAMEN_ASIDES)) },
-      { distance: 44, run: () => this.say("ramen_deal") },
+      { distance: 65, run: () => this.say("you_yeah") },
+      { distance: 73, run: () => this.say(this.pick(RAMEN_ASIDES)) },
+      { distance: 80, run: () => this.say("ramen_deal") },
+
+      // --- Name posts: the ledger made visible (~110-165m, after the Sentinel@90) ---
+      { distance: 120, run: () => this.say("you_names_posts") },
+      { distance: 145, run: () => this.say("ramen_names_posts") },
+
+      // --- Act 3: the road hunts (~230-630m, between the first Watcher@220 and the Hunger@640) ---
       {
-        distance: 158,
+        distance: 230,
         run: () => {
           this.say("ramen_hey");
           this.say("you_bowl_talk");
@@ -774,7 +924,7 @@ export class RamenGame {
         },
       },
       {
-        distance: 168,
+        distance: 245,
         run: () => {
           this.bowlHeavy = 8;
           this.trayDamage = Math.min(1, this.trayDamage + 0.08);
@@ -783,25 +933,25 @@ export class RamenGame {
         },
       },
       {
-        distance: 178,
+        distance: 261,
         run: () => {
           this.say("ramen_with_us");
           this.audio.whisper();
         },
       },
-      { distance: 188, run: () => this.say("you_not_mine") },
-      { distance: 198, run: () => this.say("you_heard") },
+      { distance: 276, run: () => this.say("you_not_mine") },
+      { distance: 292, run: () => this.say("you_heard") },
       {
-        distance: 210,
+        distance: 310,
         run: () => {
           this.trayRollV += 1.2;
           this.audio.twig();
           this.warn("COLD PATCH");
         },
       },
-      { distance: 218, run: () => this.say("ramen_wind") },
+      { distance: 322, run: () => this.say("ramen_wind") },
       {
-        distance: 222,
+        distance: 328,
         run: () => {
           this.world.glimpse.position.set(-7.2, 0, this.yawObject.position.z - 11);
           this.world.glimpse.visible = true;
@@ -809,9 +959,9 @@ export class RamenGame {
           this.audio.twig();
         },
       },
-      { distance: 232, run: () => this.say("ramen_dont_look") },
+      { distance: 344, run: () => this.say("ramen_dont_look") },
       {
-        distance: 248,
+        distance: 369,
         run: () => {
           if (this.lookingBack) {
             this.backScare();
@@ -826,28 +976,28 @@ export class RamenGame {
         },
       },
       {
-        distance: 268,
+        distance: 399,
         run: () => {
           this.say("ramen_gaps");
           this.audio.whisper();
         },
       },
       {
-        distance: 278,
+        distance: 415,
         run: () => {
-          this.world.glimpse.position.set(7.4, 0, -358);
+          this.world.glimpse.position.set(7.4, 0, -495);
           this.world.glimpse.visible = true;
-          this.glimpseUntil = 300;
+          this.glimpseUntil = 450;
           this.audio.twig();
           this.warn("SOMETHING IN THE TREES");
         },
       },
-      { distance: 292, run: () => this.say("you_rock") },
-      { distance: 300, run: () => this.say("you_how_long") },
-      { distance: 308, run: () => this.say("ramen_how_long") },
-      { distance: 314, run: () => this.say("ramen_road") },
+      { distance: 436, run: () => this.say("you_rock") },
+      { distance: 448, run: () => this.say("you_how_long") },
+      { distance: 461, run: () => this.say("ramen_how_long") },
+      { distance: 470, run: () => this.say("ramen_road") },
       {
-        distance: 324,
+        distance: 485,
         run: () => {
           this.crossing = true;
           this.crossingT = 0;
@@ -855,7 +1005,7 @@ export class RamenGame {
         },
       },
       {
-        distance: 338,
+        distance: 507,
         run: () => {
           this.world.bushHands.visible = true;
           this.scare("hands");
@@ -864,16 +1014,16 @@ export class RamenGame {
           this.say("ramen_dont_answer");
         },
       },
-      { distance: 350, run: () => this.say("ramen_dont_thank") },
+      { distance: 525, run: () => this.say("ramen_dont_thank") },
       {
-        distance: 360,
+        distance: 541,
         run: () => {
           this.say("ramen_names");
           this.say("you_name");
         },
       },
       {
-        distance: 368,
+        distance: 553,
         run: () => {
           this.trayRollV += 1.8;
           this.trayDamage = Math.min(1, this.trayDamage + 0.06);
@@ -881,16 +1031,16 @@ export class RamenGame {
           this.warn("THE TRAY SHUDDERED");
         },
       },
-      { distance: 388, run: () => this.say("ramen_faster") },
+      { distance: 584, run: () => this.say("ramen_faster") },
       {
-        distance: 396,
+        distance: 596,
         run: () => {
           this.say("ramen_second_look");
           if (this.lookingBack) this.backScare();
         },
       },
       {
-        distance: 408,
+        distance: 615,
         run: () => {
           this.blackout = 1.35;
           this.lampKilled = true;
@@ -898,7 +1048,7 @@ export class RamenGame {
         },
       },
       {
-        distance: 418,
+        distance: 630,
         run: () => {
           this.frontScare();
           this.scare("face");
@@ -907,22 +1057,70 @@ export class RamenGame {
           this.say("ramen_tray");
         },
       },
-      { distance: 492, run: () => this.say("ramen_try_again") },
-      { distance: 508, run: () => this.say("you_why") },
-      { distance: 518, run: () => this.say("ramen_warm") },
-      { distance: 538, run: () => this.say("ramen_eat_you") },
+
+      // --- Act 4: aftermath of the Hunger@640, offerings, bridge to The Other@900 ---
+      { distance: 650, run: () => this.say("ramen_try_again") },
+      { distance: 670, run: () => this.say("you_why") },
+      { distance: 682, run: () => this.say("ramen_warm") },
+      { distance: 707, run: () => this.say("ramen_eat_you") },
+      { distance: 710, run: () => this.say("you_offerings") },
+      { distance: 717, run: () => this.say("ramen_offerings") },
+      { distance: 724, run: () => this.say("you_still_here") },
+      { distance: 742, run: () => this.say("ramen_others") },
+      { distance: 761, run: () => this.say("you_others") },
+      { distance: 781, run: () => this.say("ramen_others_answer") },
       {
-        distance: 552,
+        distance: 801,
         run: () => {
-          this.falsePorch = 4.2;
-          this.say("you_light_moved");
-          this.say("ramen_not_porch");
+          this.trayRollV += 1.6;
+          this.audio.twig();
+          this.warn("THE ROAD NARROWS");
         },
       },
-      { distance: 568, run: () => this.say("ramen_almost") },
-      { distance: 588, run: () => this.say("you_light") },
-      { distance: 608, run: () => this.say("ramen_focus") },
-      { distance: 622, run: () => this.say("you_almost") },
+      { distance: 821, run: () => this.say("you_narrow") },
+      { distance: 841, run: () => this.say("ramen_narrow") },
+      {
+        distance: 860,
+        run: () => {
+          this.world.glimpse.position.set(-7.6, 0, this.yawObject.position.z - 10);
+          this.world.glimpse.visible = true;
+          this.glimpseUntil = this.distance + 14;
+          this.audio.twig();
+          this.warn("SOMETHING IS PACING YOU");
+        },
+      },
+      { distance: 880, run: () => this.say("you_close_now") },
+
+      // --- Act 5: after The Other@900 — the loop confirmed, the wrong house, before Watcher2@1100 ---
+      { distance: 933, run: () => this.say("ramen_shaken") },
+      { distance: 970, run: () => this.say("you_yeah") },
+      { distance: 1000, run: () => this.say("ramen_toll") },
+      { distance: 1027, run: () => this.say("you_toll") },
+      { distance: 1053, run: () => this.say("ramen_toll_answer") },
+      {
+        distance: 1063,
+        run: () => {
+          this.world.wrongHouse.visible = true;
+          this.say("you_wrong_house_sight");
+        },
+      },
+      { distance: 1075, run: () => this.say("ramen_wrong_house_sight") },
+      {
+        distance: 1092,
+        run: () => {
+          this.world.wrongHouseLight.intensity = 0;
+          this.say("you_light_moved");
+          this.say("ramen_not_porch");
+          window.setTimeout(() => {
+            this.world.wrongHouse.visible = false;
+          }, 1800);
+        },
+      },
+
+      // --- Act 6: final approach, after Watcher2@1100, before the house@1200 ---
+      { distance: 1126, run: () => this.say("you_last_stretch") },
+      { distance: 1146, run: () => this.say("ramen_last_stretch") },
+      { distance: 1161, run: () => this.say("you_almost") },
     ];
   }
 
@@ -954,15 +1152,15 @@ export class RamenGame {
     const spilled = this.spilled;
     let title = "HOME";
     let html =
-      '"Chicken?"<br>"Yeah."<br>"Nice."<br><br>You set the tray on the table. Steam lifts. For a moment the bowl says thank you.<br><br>But it\'s just soup.<br><br><em>I was chicken.</em>';
+      "The bowl is waiting. It is always waiting.<br><br>You made it. This time.<br><br>The silhouette in the kitchen window turns its head slightly. It knows you are here. It knows you brought the bowl.<br><br><em>You are home. For now.</em>";
     if (kind === "taken") {
       title = "IT WAS NEVER YOURS";
       html =
-        "The tray is empty. The road is not.<br><br>Something warm sits in your chest where the bowl used to be. It remembers being carried. It remembers being dropped.<br><br>The house lights go out.<br><br><em>I prefer pork.</em>";
+        "The porch light is on. You don't reach it.<br><br>The Sentinel already has your name. The Hunger already had its taste. The road just needed one more thing to go wrong.<br><br>Something warm settles where the bowl used to be. It remembers being carried. It remembers being dropped. It is already coaching the next person the way it coached you.<br><br><em>You are gone. But the road is not empty.</em>";
     } else if (spilled) {
-      title = "HOME (NOODLES EVERYWHERE)";
+      title = "HOME (EMPTY HANDS)";
       html =
-        '"Chicken?"<br>"...it was."<br><br>The tray is wet. Your roommate looks at it, then at you, then closes the door from the inside.<br><br>You sit on the porch. The Sentinel is still there. The Watcher is probably still there.<br><br><em>I was chicken.</em>';
+        "The tray is wet. Your hands are empty. The door does not open.<br><br>You sit on the porch, waiting for a knock that never comes. The Sentinel is still there. The Watcher is probably still there.<br><br><em>You paid the toll. The road took everything.</em>";
     }
     window.setTimeout(() => useGame.getState().setEnding(title, html), 900);
   }
@@ -1003,6 +1201,8 @@ export class RamenGame {
   }
 
   private updatePlay(dt: number, t: number) {
+    for (const mixer of this.world.mixers) mixer.update(dt);
+
     let forward = 0;
     let right = 0;
     if (this.held("KeyW") || this.held("ArrowUp")) forward += 1;
@@ -1160,12 +1360,11 @@ export class RamenGame {
 
     const stability = this.spilled ? 0 : Math.max(0, 100 - absSlide * 100);
     this.audio.setTension(
-      (this.distance / 650) * 0.5 + (this.spilled ? 0.5 : 0) + (1 - stability / 100) * 0.5,
+      (this.distance / -HOUSE_Z) * 0.5 + (this.spilled ? 0.5 : 0) + (1 - stability / 100) * 0.5,
     );
     if (stability < 38 && !this.spilled) this.audio.heartbeat();
 
     this.bowlHeavy = Math.max(0, this.bowlHeavy - dt);
-    this.falsePorch = Math.max(0, this.falsePorch - dt);
 
     // Characters
     if (this.mailboxArmed) {
@@ -1195,10 +1394,17 @@ export class RamenGame {
       if (u >= 1) {
         this.crossing = false;
         this.world.stranger.visible = false;
-        this.world.stranger.position.set(1.4, 0, -148);
+        this.world.stranger.position.set(1.4, 0, -220);
       }
     } else if (this.world.stranger.visible) {
       this.world.strangerHead.lookAt(
+        this.yawObject.position.x,
+        1.95,
+        this.yawObject.position.z,
+      );
+    }
+    if (this.world.otherWalker.visible) {
+      this.world.otherWalkerHead.lookAt(
         this.yawObject.position.x,
         1.95,
         this.yawObject.position.z,
@@ -1210,7 +1416,7 @@ export class RamenGame {
     if (this.world.bushHands.visible) {
       this.world.bushHands.position.x = 4.1 + Math.sin(t * 8) * 0.15;
       this.world.bushHands.position.y = 0.15 + Math.sin(t * 10) * 0.08;
-      if (this.distance > 355) this.world.bushHands.visible = false;
+      if (this.distance > 524) this.world.bushHands.visible = false;
     }
 
     if (this.grabbing) {
@@ -1287,7 +1493,7 @@ export class RamenGame {
       }
     }
 
-    if (this.lookingBack && this.distance > 228 && this.distance < 260 && !this.seenBack) {
+    if (this.lookingBack && this.distance > 338 && this.distance < 380 && !this.seenBack) {
       this.backScare();
     }
 
@@ -1302,13 +1508,12 @@ export class RamenGame {
     if (this.lampKilled) this.world.lampDying.intensity = 0;
     else {
       this.world.lampDying.intensity =
-        4.2 + Math.sin(t * 9) * 1.1 + (Math.random() < 0.02 ? -2.4 : 0);
+        100 + Math.sin(t * 9) * 28 + (Math.random() < 0.02 ? -70 : 0);
     }
+    this.updateLampPool();
 
     const distHouse = Math.abs(-this.yawObject.position.z - HOUSE_Z);
-    this.world.porchLight.intensity =
-      (distHouse < 40 ? THREE.MathUtils.lerp(8, 2.2, distHouse / 40) : 2.2) +
-      (this.falsePorch > 0 ? 11 : 0);
+    this.world.porchLight.intensity = distHouse < 40 ? THREE.MathUtils.lerp(8, 2.2, distHouse / 40) : 2.2;
     this.world.fogTime.value = t;
     if (this.scene.fog instanceof THREE.FogExp2) {
       const tight = this.grabbing || this.world.monster.visible || this.hungerLunging;
@@ -1341,6 +1546,34 @@ export class RamenGame {
           ev.run();
         }
       }
+    }
+  }
+
+  /** Three r185 lights are physically sized — dozens of live streetlamps
+   * would be both wrong-looking (they'd blow out the fog) and expensive.
+   * Only the handful nearest the player actually emit; the rest sit at
+   * zero intensity / invisible until the player gets close. */
+  private updateLampPool() {
+    const NEAR_LAMPS = 6;
+    const z = this.yawObject.position.z;
+    const lamps = this.world.lampLights;
+    if (lamps.length <= NEAR_LAMPS) {
+      for (const l of lamps) {
+        l.point.visible = true;
+        l.spot.visible = true;
+        l.point.intensity = l.pointIntensity;
+        l.spot.intensity = l.spotIntensity;
+      }
+      return;
+    }
+    const ranked = [...lamps].sort((a, b) => Math.abs(a.z - z) - Math.abs(b.z - z));
+    for (let i = 0; i < ranked.length; i++) {
+      const on = i < NEAR_LAMPS;
+      const l = ranked[i];
+      l.point.visible = on;
+      l.spot.visible = on;
+      l.point.intensity = on ? l.pointIntensity : 0;
+      l.spot.intensity = on ? l.spotIntensity : 0;
     }
   }
 
@@ -1405,6 +1638,8 @@ export class RamenGame {
     window.removeEventListener("pointercancel", this.onPtrUp);
     this.exitLock();
     if (this.typing) window.clearInterval(this.typing);
+    if (this.autoAdvanceTimer !== null) window.clearTimeout(this.autoAdvanceTimer);
+    this.dialogueGen++;
     this.audio.dispose();
     disposeWorld(this.world);
     disposeArt(this.art);

@@ -3,492 +3,1056 @@
     "file": "you_okay.wav",
     "who": "YOU",
     "mood": "tired calm",
-    "dialog": "Okay."
+    "dialog": "Okay.",
+    "emo_text": "Quiet tired young adult, close mic, trying to stay calm, small breath, not smiling.",
+    "emo_alpha": 0.45
   },
   {
     "file": "you_okay_again.wav",
     "who": "YOU",
     "mood": "tired resigned",
-    "dialog": "Okay. Again."
+    "dialog": "Okay. Again.",
+    "emo_text": "Same tired walker, worn down, resigned, still quiet, no panic.",
+    "emo_alpha": 0.5
   },
   {
     "file": "you_later.wav",
     "who": "YOU",
     "mood": "tired uneasy",
-    "dialog": "It's later than I thought."
+    "dialog": "It's later than I thought.",
+    "emo_text": "Tired, muttering to self, slight unease, close mic, not loud.",
+    "emo_alpha": 0.5
   },
   {
     "file": "you_fog.wav",
     "who": "YOU",
     "mood": "unsettled whisper",
-    "dialog": "The fog tastes like the kitchen."
+    "dialog": "The fog tastes like the kitchen.",
+    "emo_text": "Quiet observation, unsettled, almost whispering, no joke in the voice.",
+    "emo_alpha": 0.55
   },
   {
     "file": "you_hands.wav",
     "who": "YOU",
     "mood": "tense fear",
-    "dialog": "My hands are already shaking."
+    "dialog": "My hands are already shaking.",
+    "emo_text": "Admitting fear, still trying to keep volume low, tense but not crying.",
+    "emo_alpha": 0.6
   },
   {
     "file": "you_wet.wav",
     "who": "YOU",
     "mood": "uneasy flat",
-    "dialog": "The asphalt is wet. It wasn't raining."
+    "dialog": "The asphalt is wet. It wasn't raining.",
+    "emo_text": "Noticing something wrong, careful, uneasy, flat delivery.",
+    "emo_alpha": 0.55
   },
   {
     "file": "you_warm.wav",
     "who": "YOU",
     "mood": "quiet dread",
-    "dialog": "The bowl is still warm. Too warm."
+    "dialog": "The bowl is still warm. Too warm.",
+    "emo_text": "Quiet dread on the last two words, close mic, not theatrical.",
+    "emo_alpha": 0.55
   },
   {
     "file": "you_yeah.wav",
     "who": "YOU",
     "mood": "tired under-breath",
-    "dialog": "Yeah."
+    "dialog": "Yeah.",
+    "emo_text": "Short, tired, agreeing just to stop talking, almost under the breath.",
+    "emo_alpha": 0.4
   },
   {
     "file": "you_count.wav",
     "who": "YOU",
     "mood": "trying not to panic",
-    "dialog": "I already counted the lamps. There are more now."
+    "dialog": "I already counted the lamps. There are more now.",
+    "emo_text": "Trying to stay logical, fear leaking in, not shouting.",
+    "emo_alpha": 0.6
   },
   {
     "file": "you_home.wav",
     "who": "YOU",
     "mood": "defensive polite",
-    "dialog": "I'm just walking home."
+    "dialog": "I'm just walking home.",
+    "emo_text": "Defensive, polite, hoping that ends the conversation.",
+    "emo_alpha": 0.5
   },
   {
     "file": "you_not_leaving.wav",
     "who": "YOU",
     "mood": "scared firm",
-    "dialog": "I'm not leaving anything."
+    "dialog": "I'm not leaving anything.",
+    "emo_text": "Firm but quiet, a little too fast, scared of the watchman.",
+    "emo_alpha": 0.5
   },
   {
     "file": "you_didnt_blink.wav",
     "who": "YOU",
     "mood": "aftershock whisper",
-    "dialog": "He never blinked."
+    "dialog": "He never blinked.",
+    "emo_text": "Aftershock, whispering to self, skin-crawl, not a scream.",
+    "emo_alpha": 0.62
   },
   {
     "file": "you_evening.wav",
     "who": "YOU",
     "mood": "forced polite",
-    "dialog": "Good evening."
+    "dialog": "Good evening.",
+    "emo_text": "Forced politeness, matching the stranger, slight tightness in the throat.",
+    "emo_alpha": 0.4
   },
   {
     "file": "you_ramen.wav",
     "who": "YOU",
     "mood": "cautious",
-    "dialog": "Ramen."
+    "dialog": "Ramen.",
+    "emo_text": "One word answer, cautious, doesn't want to explain.",
+    "emo_alpha": 0.4
   },
   {
     "file": "you_soup.wav",
     "who": "YOU",
     "mood": "unconvincing",
-    "dialog": "It's soup."
+    "dialog": "It's soup.",
+    "emo_text": "Trying to make it ordinary, not convincing, quiet.",
+    "emo_alpha": 0.45
   },
   {
     "file": "you_bowl_talk.wav",
     "who": "YOU",
     "mood": "startled",
-    "dialog": "Did the bowl just—"
+    "dialog": "Did the bowl just—",
+    "emo_text": "Startled interruption, cut off, breathy, not yelling.",
+    "emo_alpha": 0.7
   },
   {
     "file": "you_heard.wav",
     "who": "YOU",
     "mood": "afraid listening",
-    "dialog": "I think I heard something."
+    "dialog": "I think I heard something.",
+    "emo_text": "Listening, afraid to be right, close whisper.",
+    "emo_alpha": 0.58
   },
   {
     "file": "you_not_mine.wav",
     "who": "YOU",
     "mood": "certain fear",
-    "dialog": "Those footsteps aren't mine."
+    "dialog": "Those footsteps aren't mine.",
+    "emo_text": "Certainty and fear together, still quiet, walking while talking.",
+    "emo_alpha": 0.65
   },
   {
     "file": "you_nothing.wav",
     "who": "YOU",
     "mood": "scared lie",
-    "dialog": "There's nothing—"
+    "dialog": "There's nothing—",
+    "emo_text": "Lying to himself, voice cracking on the cut-off, scared.",
+    "emo_alpha": 0.72
   },
   {
     "file": "you_what_see.wav",
     "who": "YOU",
     "mood": "hushed dread",
-    "dialog": "What would I see?"
+    "dialog": "What would I see?",
+    "emo_text": "Doesn't really want the answer, hushed, curious in a bad way.",
+    "emo_alpha": 0.55
   },
   {
     "file": "you_rock.wav",
     "who": "YOU",
     "mood": "disoriented",
-    "dialog": "I've seen that rock before."
+    "dialog": "I've seen that rock before.",
+    "emo_text": "Disoriented, trying not to panic, muttering.",
+    "emo_alpha": 0.6
   },
   {
     "file": "you_how_long.wav",
     "who": "YOU",
     "mood": "exhausted lost",
-    "dialog": "How long have I been walking."
+    "dialog": "How long have I been walking.",
+    "emo_text": "Exhausted, not really asking anyone, lost.",
+    "emo_alpha": 0.55
   },
   {
     "file": "you_what_was.wav",
     "who": "YOU",
     "mood": "afterscare",
-    "dialog": "What was that."
+    "dialog": "What was that.",
+    "emo_text": "After a scare, breathy, one beat too late, not a scream.",
+    "emo_alpha": 0.7
   },
   {
     "file": "you_name.wav",
     "who": "YOU",
     "mood": "thin unease",
-    "dialog": "Did you say my name?"
+    "dialog": "Did you say my name?",
+    "emo_text": "Unsettled, accusing the bowl, voice thin.",
+    "emo_alpha": 0.68
   },
   {
     "file": "you_no.wav",
     "who": "YOU",
     "mood": "sudden fear",
-    "dialog": "No—"
+    "dialog": "No—",
+    "emo_text": "Sudden fear, cut off, sharp inhale, still not a movie scream.",
+    "emo_alpha": 0.75
   },
   {
     "file": "you_face.wav",
     "who": "YOU",
     "mood": "recognition horror",
-    "dialog": "I know that face."
+    "dialog": "I know that face.",
+    "emo_text": "Recognition horror, quiet, sick, close to the mic.",
+    "emo_alpha": 0.72
   },
   {
     "file": "you_chicken.wav",
     "who": "YOU",
     "mood": "hesitant lie",
-    "dialog": "...chicken."
+    "dialog": "...chicken.",
+    "emo_text": "Hesitant lie, pause before the word, trying to sound sure and failing.",
+    "emo_alpha": 0.55
   },
   {
     "file": "you_why.wav",
     "who": "YOU",
     "mood": "hollow",
-    "dialog": "Why."
+    "dialog": "Why.",
+    "emo_text": "Hollow, tired, one word, no energy left.",
+    "emo_alpha": 0.5
   },
   {
     "file": "you_light.wav",
     "who": "YOU",
     "mood": "cautious relief",
-    "dialog": "I can see the light."
+    "dialog": "I can see the light.",
+    "emo_text": "Relief held back, still afraid it isn't real.",
+    "emo_alpha": 0.5
   },
   {
     "file": "you_light_moved.wav",
     "who": "YOU",
     "mood": "hushed dread",
-    "dialog": "The light moved."
+    "dialog": "The light moved.",
+    "emo_text": "Dread, reporting a fact that shouldn't be true, hushed.",
+    "emo_alpha": 0.7
   },
   {
     "file": "you_almost.wav",
     "who": "YOU",
     "mood": "breathless",
-    "dialog": "Almost there."
+    "dialog": "Almost there.",
+    "emo_text": "Breathless, encouraging himself, quiet.",
+    "emo_alpha": 0.45
   },
   {
     "file": "you_just_ramen.wav",
     "who": "YOU",
     "mood": "soft denial",
-    "dialog": "It's just ramen."
+    "dialog": "It's just ramen.",
+    "emo_text": "Trying to make it small, not believing it, soft.",
+    "emo_alpha": 0.5
   },
   {
     "file": "ramen_dont_spill.wav",
     "who": "RAMEN",
     "mood": "intimate wrong-calm",
-    "dialog": "Don't spill me."
+    "dialog": "Don't spill me.",
+    "emo_text": "Intimate voice in the ear, too calm, slightly wrong, not cute, even and close.",
+    "emo_alpha": 0.6
   },
   {
     "file": "ramen_deal.wav",
     "who": "RAMEN",
     "mood": "even instructional",
-    "dialog": "Twenty minutes. Then you eat. That was the deal."
+    "dialog": "Twenty minutes. Then you eat. That was the deal.",
+    "emo_text": "Patient, instructional, unnervingly even, like a reminder not a joke.",
+    "emo_alpha": 0.55
   },
   {
     "file": "ramen_easy.wav",
     "who": "RAMEN",
     "mood": "soft correction",
-    "dialog": "Easy."
+    "dialog": "Easy.",
+    "emo_text": "Soft correction, close to the ear, almost kind, slightly off.",
+    "emo_alpha": 0.5
   },
   {
     "file": "ramen_tilting.wav",
     "who": "RAMEN",
     "mood": "matter-of-fact",
-    "dialog": "You're tilting."
+    "dialog": "You're tilting.",
+    "emo_text": "Matter of fact, intimate, no panic, a little too aware of the body.",
+    "emo_alpha": 0.55
   },
   {
     "file": "ramen_left.wav",
     "who": "RAMEN",
     "mood": "calm correction",
-    "dialog": "Left. No—level."
+    "dialog": "Left. No—level.",
+    "emo_text": "Correcting mid-word, still calm, close mic, not rushed.",
+    "emo_alpha": 0.55
   },
   {
     "file": "ramen_hey.wav",
     "who": "RAMEN",
     "mood": "intimate wrong",
-    "dialog": "Hey."
+    "dialog": "Hey.",
+    "emo_text": "Getting attention from inside the bowl, intimate, wrong, not friendly-cute.",
+    "emo_alpha": 0.58
   },
   {
     "file": "ramen_level.wav",
     "who": "RAMEN",
     "mood": "controlling calm",
-    "dialog": "Keep me level. Look only when you have to."
+    "dialog": "Keep me level. Look only when you have to.",
+    "emo_text": "Quiet instruction, controlling, close, unblinking calm.",
+    "emo_alpha": 0.55
   },
   {
     "file": "ramen_counting.wav",
     "who": "RAMEN",
     "mood": "pleased whisper",
-    "dialog": "He was counting your steps."
+    "dialog": "He was counting your steps.",
+    "emo_text": "Sharing a secret, pleased in a wrong way, still a whisper.",
+    "emo_alpha": 0.62
   },
   {
     "file": "ramen_with_us.wav",
     "who": "RAMEN",
     "mood": "calm danger",
-    "dialog": "Something is walking with us."
+    "dialog": "Something is walking with us.",
+    "emo_text": "Calm announcement of danger, no comfort, intimate.",
+    "emo_alpha": 0.65
   },
   {
     "file": "ramen_wind.wav",
     "who": "RAMEN",
     "mood": "cold reassurance",
-    "dialog": "It's just the wind. Probably."
+    "dialog": "It's just the wind. Probably.",
+    "emo_text": "Reassurance that doesn't believe itself, the last word colder.",
+    "emo_alpha": 0.55
   },
   {
     "file": "ramen_dont_look.wav",
     "who": "RAMEN",
     "mood": "urgent whisper",
-    "dialog": "Don't look behind you."
+    "dialog": "Don't look behind you.",
+    "emo_text": "Urgent whisper, still close, no shout, command not suggestion.",
+    "emo_alpha": 0.7
   },
   {
     "file": "ramen_said_dont.wav",
     "who": "RAMEN",
     "mood": "quiet anger",
-    "dialog": "I said don't."
+    "dialog": "I said don't.",
+    "emo_text": "Anger without raising the voice, intimate, clipped, dangerous.",
+    "emo_alpha": 0.78
   },
   {
     "file": "ramen_not_anymore.wav",
     "who": "RAMEN",
     "mood": "cold final",
-    "dialog": "Not anymore."
+    "dialog": "Not anymore.",
+    "emo_text": "Final, cold, close to the ear, no sympathy.",
+    "emo_alpha": 0.65
   },
   {
     "file": "ramen_good_walk.wav",
     "who": "RAMEN",
     "mood": "leash calm",
-    "dialog": "Good. Keep walking."
+    "dialog": "Good. Keep walking.",
+    "emo_text": "Approval that feels like a leash, calm, intimate.",
+    "emo_alpha": 0.5
   },
   {
     "file": "ramen_remember.wav",
     "who": "RAMEN",
     "mood": "gentle wrong",
-    "dialog": "Nothing you want to remember."
+    "dialog": "Nothing you want to remember.",
+    "emo_text": "Soft warning, almost gentle, wrong.",
+    "emo_alpha": 0.6
   },
   {
     "file": "ramen_gaps.wav",
     "who": "RAMEN",
     "mood": "ominous story",
-    "dialog": "They live in the gaps between the lamps."
+    "dialog": "They live in the gaps between the lamps.",
+    "emo_text": "Storytelling in the ear, unhurried, ominous, not theatrical.",
+    "emo_alpha": 0.62
   },
   {
     "file": "ramen_road.wav",
     "who": "RAMEN",
     "mood": "old knowledge",
-    "dialog": "The road remembers everyone who runs."
+    "dialog": "The road remembers everyone who runs.",
+    "emo_text": "Old knowledge, calm, slightly pleased.",
+    "emo_alpha": 0.6
   },
   {
     "file": "ramen_how_long.wav",
     "who": "RAMEN",
     "mood": "forbidding",
-    "dialog": "Longer than twenty minutes. Don't check."
+    "dialog": "Longer than twenty minutes. Don't check.",
+    "emo_text": "Knows more than it should, intimate, forbidding.",
+    "emo_alpha": 0.58
   },
   {
     "file": "ramen_dont_answer.wav",
     "who": "RAMEN",
     "mood": "sharp whisper",
-    "dialog": "Don't answer it."
+    "dialog": "Don't answer it.",
+    "emo_text": "Sharp whisper command, still close, no panic in the timbre.",
+    "emo_alpha": 0.68
   },
   {
     "file": "ramen_dont_thank.wav",
     "who": "RAMEN",
     "mood": "ritual quiet",
-    "dialog": "Don't thank them."
+    "dialog": "Don't thank them.",
+    "emo_text": "Rule-giving, quiet, like a ritual, not cute.",
+    "emo_alpha": 0.62
   },
   {
     "file": "ramen_names.wav",
     "who": "RAMEN",
     "mood": "uncanny proud",
-    "dialog": "I can say names I was never given."
+    "dialog": "I can say names I was never given.",
+    "emo_text": "Uncanny, intimate, a little proud, not human-careful.",
+    "emo_alpha": 0.7
   },
   {
     "file": "ramen_faster.wav",
     "who": "RAMEN",
     "mood": "coach threat",
-    "dialog": "Walk faster. But not too fast. You know what happens."
+    "dialog": "Walk faster. But not too fast. You know what happens.",
+    "emo_text": "Coach and threat together, even, close mic.",
+    "emo_alpha": 0.6
   },
   {
     "file": "ramen_second_look.wav",
     "who": "RAMEN",
     "mood": "tighter warning",
-    "dialog": "Still don't look."
+    "dialog": "Still don't look.",
+    "emo_text": "Repeat warning, tighter, still a whisper.",
+    "emo_alpha": 0.68
   },
   {
     "file": "ramen_tray.wav",
     "who": "RAMEN",
     "mood": "urgent control",
-    "dialog": "Keep the bowl on the tray. Don't look at it."
+    "dialog": "Keep the bowl on the tray. Don't look at it.",
+    "emo_text": "During a scare, urgent but not shouting, controlling.",
+    "emo_alpha": 0.7
   },
   {
     "file": "ramen_wanted_me.wav",
     "who": "RAMEN",
     "mood": "flattered calm",
-    "dialog": "It didn't want you. It wanted me."
+    "dialog": "It didn't want you. It wanted me.",
+    "emo_text": "Matter of fact after violence, intimate, almost flattered.",
+    "emo_alpha": 0.6
   },
   {
     "file": "ramen_try_again.wav",
     "who": "RAMEN",
     "mood": "calm warning",
-    "dialog": "It will try again if you run."
+    "dialog": "It will try again if you run.",
+    "emo_text": "Warning with no comfort, calm, close.",
+    "emo_alpha": 0.58
   },
   {
     "file": "ramen_warm.wav",
     "who": "RAMEN",
     "mood": "wrong confession",
-    "dialog": "Because I'm warm. Because I'm full. Because I remember being eaten."
+    "dialog": "Because I'm warm. Because I'm full. Because I remember being eaten.",
+    "emo_text": "Confession, slow, sensual in a wrong way, not cute, low.",
+    "emo_alpha": 0.68
   },
   {
     "file": "ramen_eat_you.wav",
     "who": "RAMEN",
     "mood": "helpful threat",
-    "dialog": "If you spill me they will eat you instead."
+    "dialog": "If you spill me they will eat you instead.",
+    "emo_text": "Calm threat, helpful tone, intimate.",
+    "emo_alpha": 0.65
   },
   {
     "file": "ramen_almost.wav",
     "who": "RAMEN",
     "mood": "too-calm guide",
-    "dialog": "Almost there."
+    "dialog": "Almost there.",
+    "emo_text": "Soft, guiding, still too calm.",
+    "emo_alpha": 0.5
   },
   {
     "file": "ramen_not_porch.wav",
     "who": "RAMEN",
     "mood": "cold certain",
-    "dialog": "That's not the porch yet."
+    "dialog": "That's not the porch yet.",
+    "emo_text": "Correcting hope, cold, close, certain.",
+    "emo_alpha": 0.68
   },
   {
     "file": "ramen_focus.wav",
     "who": "RAMEN",
     "mood": "tight whisper",
-    "dialog": "Don't get distracted now."
+    "dialog": "Don't get distracted now.",
+    "emo_text": "Tight instruction, still a whisper.",
+    "emo_alpha": 0.55
   },
   {
     "file": "ramen_good.wav",
     "who": "RAMEN",
     "mood": "possessive affection",
-    "dialog": "You've been good to me."
+    "dialog": "You've been good to me.",
+    "emo_text": "Affection that feels like ownership, intimate, slow.",
+    "emo_alpha": 0.6
   },
   {
     "file": "ramen_no_isnt.wav",
     "who": "RAMEN",
     "mood": "gentle wrong",
-    "dialog": "No. It isn't."
+    "dialog": "No. It isn't.",
+    "emo_text": "Final correction, gentle and wrong, close to the ear.",
+    "emo_alpha": 0.62
   },
   {
     "file": "sentinel_excuse.wav",
     "who": "SENTINEL",
     "mood": "dry formal",
-    "dialog": "Excuse me."
+    "dialog": "Excuse me.",
+    "emo_text": "Dry roadside watchman, formal, unblinking, no smile, even volume.",
+    "emo_alpha": 0.4
   },
   {
     "file": "sentinel_all_say.wav",
     "who": "SENTINEL",
     "mood": "dry contempt",
-    "dialog": "That's what they all say."
+    "dialog": "That's what they all say.",
+    "emo_text": "Same formal watchman, faintly contemptuous, no warmth, no rush.",
+    "emo_alpha": 0.45
   },
   {
     "file": "sentinel_name.wav",
     "who": "SENTINEL",
     "mood": "dry report",
-    "dialog": "The last person who carried something warm down this road left their name in me."
+    "dialog": "The last person who carried something warm down this road left their name in me.",
+    "emo_text": "Formal, unblinking, reporting a fact, no melody, slightly too long a breath.",
+    "emo_alpha": 0.5
   },
   {
     "file": "sentinel_keep.wav",
     "who": "SENTINEL",
     "mood": "dry possessive",
-    "dialog": "I still have it. In case they come back."
+    "dialog": "I still have it. In case they come back.",
+    "emo_text": "Dry, possessive, no smile, like a clerk of the dead.",
+    "emo_alpha": 0.5
   },
   {
     "file": "sentinel_already.wav",
     "who": "SENTINEL",
     "mood": "dry certain",
-    "dialog": "You already have."
+    "dialog": "You already have.",
+    "emo_text": "Quiet certainty, formal, the last word lands and stays.",
+    "emo_alpha": 0.55
   },
   {
     "file": "sentinel_warm.wav",
     "who": "SENTINEL",
     "mood": "dry almost-kind",
-    "dialog": "Warm things don't last on this road."
+    "dialog": "Warm things don't last on this road.",
+    "emo_text": "Unblinking, almost kind, which makes it worse, flat affect.",
+    "emo_alpha": 0.5
   },
   {
     "file": "watcher_evening.wav",
     "who": "WATCHER",
     "mood": "too polite",
-    "dialog": "Good evening."
+    "dialog": "Good evening.",
+    "emo_text": "Polite stranger, too polite, even volume, no hurry, slight smile you can't hear.",
+    "emo_alpha": 0.45
   },
   {
     "file": "watcher_carrying.wav",
     "who": "WATCHER",
     "mood": "focused polite",
-    "dialog": "What are you carrying?"
+    "dialog": "What are you carrying?",
+    "emo_text": "Polite interest that is too focused, even, no small talk warmth.",
+    "emo_alpha": 0.5
   },
   {
     "file": "watcher_asked.wav",
     "who": "WATCHER",
     "mood": "polite correction",
-    "dialog": "That's not what I asked."
+    "dialog": "That's not what I asked.",
+    "emo_text": "Still polite, correction with no anger, which is worse, even volume.",
+    "emo_alpha": 0.55
   },
   {
     "file": "watcher_is_it.wav",
     "who": "WATCHER",
     "mood": "still polite",
-    "dialog": "Is it?"
+    "dialog": "Is it?",
+    "emo_text": "Two words, too still, polite disbelief, no rush.",
+    "emo_alpha": 0.58
   },
   {
     "file": "watcher_careful.wav",
     "who": "WATCHER",
     "mood": "helpful wrong",
-    "dialog": "Be careful with the lid. Things climb out."
+    "dialog": "Be careful with the lid. Things climb out.",
+    "emo_text": "Helpful stranger, too specific, even, no laugh.",
+    "emo_alpha": 0.6
   },
   {
     "file": "watcher_again.wav",
     "who": "WATCHER",
     "mood": "unhurried we",
-    "dialog": "We keep meeting people who are almost home."
+    "dialog": "We keep meeting people who are almost home.",
+    "emo_text": "Polite, plural we, unhurried, like this happens every night.",
+    "emo_alpha": 0.58
   },
   {
     "file": "hunger_beef.wav",
     "who": "THE HUNGER",
     "mood": "wet curious",
-    "dialog": "Is that beef?"
+    "dialog": "Is that beef?",
+    "emo_text": "Large wet hungry voice, low, not human-careful, close and wet, curious.",
+    "emo_alpha": 0.7
   },
   {
     "file": "hunger_smell.wav",
     "who": "THE HUNGER",
     "mood": "wet pleased",
-    "dialog": "I can smell the egg from here."
+    "dialog": "I can smell the egg from here.",
+    "emo_text": "Hungry, wet, pleased, low, too close, not careful.",
+    "emo_alpha": 0.72
   },
   {
     "file": "hunger_liar.wav",
     "who": "THE HUNGER",
     "mood": "wet angry",
-    "dialog": "Liar."
+    "dialog": "Liar.",
+    "emo_text": "Sudden anger, still low, wet, one word like a bite.",
+    "emo_alpha": 0.82
   },
   {
     "file": "hunger_share.wav",
     "who": "THE HUNGER",
     "mood": "wet demand",
-    "dialog": "Share."
+    "dialog": "Share.",
+    "emo_text": "Demand, hungry, wet, not asking, low.",
+    "emo_alpha": 0.8
   },
   {
     "file": "hunger_pork.wav",
     "who": "THE HUNGER",
     "mood": "wet satisfied",
-    "dialog": "I prefer pork."
+    "dialog": "I prefer pork.",
+    "emo_text": "After feeding, low, satisfied, wet, almost polite again.",
+    "emo_alpha": 0.65
+  },
+  {
+    "file": "you_names_posts.wav",
+    "who": "YOU",
+    "mood": "quiet unease",
+    "dialog": "Names. Carved into the fence posts. Some of them still have paint.",
+    "emo_text": "Noticing something wrong on the roadside, quiet, close mic, not panicked yet.",
+    "emo_alpha": 0.56
+  },
+  {
+    "file": "ramen_names_posts.wav",
+    "who": "RAMEN",
+    "mood": "cold permission",
+    "dialog": "Read them if you want. I won't stop you.",
+    "emo_text": "Too calm, giving permission it shouldn't need to give, intimate, faintly amused.",
+    "emo_alpha": 0.58
+  },
+  {
+    "file": "you_offerings.wav",
+    "who": "YOU",
+    "mood": "quiet dread",
+    "dialog": "There are bowls on the shoulder. All of them empty.",
+    "emo_text": "Quiet, unsettled observation, close mic, not theatrical.",
+    "emo_alpha": 0.58
+  },
+  {
+    "file": "ramen_offerings.wav",
+    "who": "RAMEN",
+    "mood": "cold instructional",
+    "dialog": "Empty means paid.",
+    "emo_text": "Even, cold, intimate, stating a rule without explaining it.",
+    "emo_alpha": 0.6
+  },
+  {
+    "file": "you_still_here.wav",
+    "who": "YOU",
+    "mood": "worn hope",
+    "dialog": "I'm still walking. That has to count for something.",
+    "emo_text": "Worn down but holding on, quiet, trying to believe it.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "ramen_others.wav",
+    "who": "RAMEN",
+    "mood": "cool ambiguous",
+    "dialog": "Others have made it this far. Some of them.",
+    "emo_text": "Cool, ambiguous comfort, intimate, the second sentence colder than the first.",
+    "emo_alpha": 0.58
+  },
+  {
+    "file": "you_others.wav",
+    "who": "YOU",
+    "mood": "wary",
+    "dialog": "Some of them?",
+    "emo_text": "Wary, doesn't want to ask but has to, quiet.",
+    "emo_alpha": 0.6
+  },
+  {
+    "file": "ramen_others_answer.wav",
+    "who": "RAMEN",
+    "mood": "cold evasive",
+    "dialog": "The road doesn't always send them home the same way.",
+    "emo_text": "Evasive, cold, intimate, refusing to elaborate.",
+    "emo_alpha": 0.64
+  },
+  {
+    "file": "you_narrow.wav",
+    "who": "YOU",
+    "mood": "disoriented",
+    "dialog": "This didn't used to be this narrow.",
+    "emo_text": "Disoriented, noticing the road change, quiet, uneasy.",
+    "emo_alpha": 0.58
+  },
+  {
+    "file": "ramen_narrow.wav",
+    "who": "RAMEN",
+    "mood": "cold correction",
+    "dialog": "It isn't the road that's changed.",
+    "emo_text": "Cold correction, intimate, lets the implication sit.",
+    "emo_alpha": 0.62
+  },
+  {
+    "file": "you_close_now.wav",
+    "who": "YOU",
+    "mood": "breathless hope",
+    "dialog": "It's close now. I can feel it being close.",
+    "emo_text": "Breathless, hopeful, trying to convince himself, quiet.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "other_evening.wav",
+    "who": "THE OTHER",
+    "mood": "flat calm",
+    "dialog": "Evening.",
+    "emo_text": "Flat, hollowed-out calm, not unfriendly, past caring, even volume.",
+    "emo_alpha": 0.4
+  },
+  {
+    "file": "you_other_hello.wav",
+    "who": "YOU",
+    "mood": "uneasy",
+    "dialog": "...hi.",
+    "emo_text": "Uneasy, caught off guard, small, quiet.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "other_empty.wav",
+    "who": "THE OTHER",
+    "mood": "flat resigned",
+    "dialog": "Tray's empty. Has been for a while.",
+    "emo_text": "Flat, resigned, no self-pity, just reporting a fact.",
+    "emo_alpha": 0.45
+  },
+  {
+    "file": "you_other_where.wav",
+    "who": "YOU",
+    "mood": "confused concern",
+    "dialog": "Did you already—are you going the wrong way?",
+    "emo_text": "Confused, a little concerned, close mic, trailing off.",
+    "emo_alpha": 0.58
+  },
+  {
+    "file": "other_no_wrong_way.wav",
+    "who": "THE OTHER",
+    "mood": "flat tired",
+    "dialog": "There's no wrong way. Just the long way and the longer way.",
+    "emo_text": "Flat, tired of the question, not unkind, even.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "ramen_dont_ask.wav",
+    "who": "RAMEN",
+    "mood": "urgent control",
+    "dialog": "Don't ask him anything else.",
+    "emo_text": "Urgent, controlling, close to the ear, no shout.",
+    "emo_alpha": 0.68
+  },
+  {
+    "file": "other_she_talks.wav",
+    "who": "THE OTHER",
+    "mood": "flat curious",
+    "dialog": "It still talks to you? Mine went quiet after the first time.",
+    "emo_text": "Mild curiosity, flat, a little envious underneath, even.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "you_first_time.wav",
+    "who": "YOU",
+    "mood": "dreading answer",
+    "dialog": "First time?",
+    "emo_text": "Doesn't want the answer, quiet, close mic.",
+    "emo_alpha": 0.6
+  },
+  {
+    "file": "other_lost_count.wav",
+    "who": "THE OTHER",
+    "mood": "flat prophecy",
+    "dialog": "I stopped counting. You will too.",
+    "emo_text": "Flat, not cruel, just certain, even, like stating the weather.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "ramen_walk_now.wav",
+    "who": "RAMEN",
+    "mood": "sharp command",
+    "dialog": "Walk. Now.",
+    "emo_text": "Sharp, urgent command, close, no room for argument, still not a shout.",
+    "emo_alpha": 0.72
+  },
+  {
+    "file": "other_see_you_again.wav",
+    "who": "THE OTHER",
+    "mood": "flat farewell",
+    "dialog": "See you out here again.",
+    "emo_text": "Flat farewell, not a threat exactly, just certain, even volume.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "you_other_aftershock.wav",
+    "who": "YOU",
+    "mood": "shaken quiet",
+    "dialog": "I don't want to see him again.",
+    "emo_text": "Shaken, quiet, close mic, trying to sound sure.",
+    "emo_alpha": 0.6
+  },
+  {
+    "file": "ramen_shaken.wav",
+    "who": "RAMEN",
+    "mood": "calm observation",
+    "dialog": "That shook you.",
+    "emo_text": "Calm observation, intimate, not comforting, just noting it.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "ramen_toll.wav",
+    "who": "RAMEN",
+    "mood": "even instructional",
+    "dialog": "He paid a toll to get this far. Empty means paid.",
+    "emo_text": "Even, instructional, intimate, explaining a rule like it's obvious.",
+    "emo_alpha": 0.6
+  },
+  {
+    "file": "you_toll.wav",
+    "who": "YOU",
+    "mood": "flat dread",
+    "dialog": "What's my toll.",
+    "emo_text": "Flat, dreading the answer, quiet, close mic.",
+    "emo_alpha": 0.58
+  },
+  {
+    "file": "ramen_toll_answer.wav",
+    "who": "RAMEN",
+    "mood": "gentle wrong",
+    "dialog": "You already started paying it. Every scare. Every spill.",
+    "emo_text": "Gentle, wrong, intimate, delivered like reassurance.",
+    "emo_alpha": 0.62
+  },
+  {
+    "file": "you_wrong_house_sight.wav",
+    "who": "YOU",
+    "mood": "fragile hope",
+    "dialog": "There's a house. Windows lit.",
+    "emo_text": "Fragile hope, wants to believe it, quiet, close mic.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "ramen_wrong_house_sight.wav",
+    "who": "RAMEN",
+    "mood": "flat correction",
+    "dialog": "Not yet.",
+    "emo_text": "Flat, quiet correction, intimate, no comfort offered.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "watcher2_again.wav",
+    "who": "WATCHER",
+    "mood": "too polite",
+    "dialog": "You again.",
+    "emo_text": "Too polite, even, faint recognition, no surprise at all.",
+    "emo_alpha": 0.48
+  },
+  {
+    "file": "you_watcher2_surprised.wav",
+    "who": "YOU",
+    "mood": "defensive confused",
+    "dialog": "We already met.",
+    "emo_text": "Defensive, confused, a little too fast, quiet.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "watcher2_we_always.wav",
+    "who": "WATCHER",
+    "mood": "polite certainty",
+    "dialog": "We always do. That's rather the point.",
+    "emo_text": "Polite certainty, even, no rush, like explaining something obvious.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "watcher2_carrying_still.wav",
+    "who": "WATCHER",
+    "mood": "focused polite",
+    "dialog": "Still carrying it, I see.",
+    "emo_text": "Focused, polite, even, looking at the tray not the face.",
+    "emo_alpha": 0.52
+  },
+  {
+    "file": "you_watcher2_almost_home.wav",
+    "who": "YOU",
+    "mood": "defensive hope",
+    "dialog": "I'm almost home.",
+    "emo_text": "Defensive, hopeful, wants this to be true, quiet.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "watcher2_almost.wav",
+    "who": "WATCHER",
+    "mood": "polite devastation",
+    "dialog": "You were almost home last time too.",
+    "emo_text": "Polite, even, devastating content delivered gently, no cruelty in the tone.",
+    "emo_alpha": 0.62
+  },
+  {
+    "file": "ramen_ignore_him.wav",
+    "who": "RAMEN",
+    "mood": "urgent control",
+    "dialog": "Ignore him. Walk.",
+    "emo_text": "Urgent, controlling, close, protective in a wrong way.",
+    "emo_alpha": 0.68
+  },
+  {
+    "file": "watcher2_farewell.wav",
+    "who": "WATCHER",
+    "mood": "polite chill",
+    "dialog": "Good luck this time.",
+    "emo_text": "Polite send-off, even, the word 'time' landing colder than the rest.",
+    "emo_alpha": 0.55
+  },
+  {
+    "file": "you_last_stretch.wav",
+    "who": "YOU",
+    "mood": "worn hope",
+    "dialog": "Last stretch. Has to be.",
+    "emo_text": "Worn, hopeful, trying to convince himself, quiet, close mic.",
+    "emo_alpha": 0.52
+  },
+  {
+    "file": "ramen_last_stretch.wav",
+    "who": "RAMEN",
+    "mood": "gentle wrong",
+    "dialog": "It is. This time.",
+    "emo_text": "Gentle, intimate, the last two words colder, wrong.",
+    "emo_alpha": 0.6
+  },
+  {
+    "file": "ramen_names_kept.wav",
+    "who": "RAMEN",
+    "mood": "gentle wrong",
+    "dialog": "The Sentinel will keep your name anyway. Just in case.",
+    "emo_text": "Gentle, intimate, delivered like a kindness, wrong.",
+    "emo_alpha": 0.62
+  },
+  {
+    "file": "you_home_final.wav",
+    "who": "YOU",
+    "mood": "quiet uncertain relief",
+    "dialog": "I'm home.",
+    "emo_text": "Quiet relief that doesn't fully believe itself, close mic.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "ramen_home_final.wav",
+    "who": "RAMEN",
+    "mood": "cold final",
+    "dialog": "For now.",
+    "emo_text": "Cold, final, intimate, no comfort, close to the ear.",
+    "emo_alpha": 0.62
+  },
+  {
+    "file": "you_legs.wav",
+    "who": "YOU",
+    "mood": "numb tired",
+    "dialog": "My legs stopped complaining a while ago.",
+    "emo_text": "Numb, tired, muttering to self, close mic, no energy.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "you_lamps_row.wav",
+    "who": "YOU",
+    "mood": "trying not to panic",
+    "dialog": "That's three lamps in a row now. There weren't three in a row before.",
+    "emo_text": "Trying to stay logical, fear leaking in, not shouting.",
+    "emo_alpha": 0.58
+  },
+  {
+    "file": "you_smell.wav",
+    "who": "YOU",
+    "mood": "quiet dread",
+    "dialog": "I can smell it through the lid.",
+    "emo_text": "Quiet, uneasy noticing, close mic, not theatrical.",
+    "emo_alpha": 0.52
+  },
+  {
+    "file": "you_talk_self.wav",
+    "who": "YOU",
+    "mood": "unconvincing",
+    "dialog": "I'm talking to myself. That's all this is.",
+    "emo_text": "Trying to convince himself, unconvincing, quiet, close mic.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "ramen_careful.wav",
+    "who": "RAMEN",
+    "mood": "soft correction",
+    "dialog": "Careful.",
+    "emo_text": "Soft correction, close to the ear, even.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "ramen_steady.wav",
+    "who": "RAMEN",
+    "mood": "matter-of-fact",
+    "dialog": "Steady.",
+    "emo_text": "Matter of fact, intimate, no panic.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "ramen_good_pace.wav",
+    "who": "RAMEN",
+    "mood": "leash calm",
+    "dialog": "Good pace. Keep it.",
+    "emo_text": "Approval that feels like a leash, calm, intimate.",
+    "emo_alpha": 0.5
+  },
+  {
+    "file": "ramen_here_again.wav",
+    "who": "RAMEN",
+    "mood": "tired knowing",
+    "dialog": "Here we go again.",
+    "emo_text": "Tired, knowing, intimate, almost fond of the routine, wrong.",
+    "emo_alpha": 0.58
   }
 ]

@@ -11,7 +11,6 @@ export function RamenWalker() {
   const webglError = useGame((s) => s.webglError);
   const distance = useGame((s) => s.distance);
   const warning = useGame((s) => s.warning);
-  const dialogue = useGame((s) => s.dialogue);
   const endingTitle = useGame((s) => s.endingTitle);
   const endingHtml = useGame((s) => s.endingHtml);
   const flash = useGame((s) => s.flash);
@@ -29,13 +28,13 @@ export function RamenWalker() {
     if (!canvas) return;
     let disposed = false;
     let game: RamenGame | null = null;
-    void Promise.all([import("@/game/engine"), import("@/game/art")])
-      .then(async ([{ RamenGame }, { loadGameArt }]) => {
+    void Promise.all([import("@/game/engine"), import("@/game/art"), import("@/game/characters")])
+      .then(async ([{ RamenGame }, { loadGameArt }, { loadCharacterModels }]) => {
         if (disposed || !canvasRef.current) return;
         try {
-          const art = await loadGameArt();
+          const [art, chars] = await Promise.all([loadGameArt(), loadCharacterModels()]);
           if (disposed || !canvasRef.current) return;
-          game = new RamenGame(canvasRef.current, art);
+          game = new RamenGame(canvasRef.current, art, chars);
           gameRef.current = game;
           if (useGame.getState().phase === "playing") game.start();
         } catch {
@@ -96,15 +95,6 @@ export function RamenWalker() {
 
       {phase === "playing" && (
         <Hud distance={distance} warning={warning} lookHint={lookHint} />
-      )}
-
-      {phase === "playing" && dialogue && (
-        <DialogueBox
-          speaker={dialogue.speaker}
-          text={dialogue.text}
-          complete={dialogue.complete}
-          onAdvance={() => gameRef.current?.advanceDialogue()}
-        />
       )}
 
       {phase === "playing" && isCoarse && (
@@ -242,38 +232,6 @@ function Hud({
   );
 }
 
-function DialogueBox({
-  speaker,
-  text,
-  complete,
-  onAdvance,
-}: {
-  speaker: string;
-  text: string;
-  complete: boolean;
-  onAdvance: () => void;
-}) {
-  const tone =
-    speaker === "THE HUNGER" || speaker === "WATCHER" || speaker === "SENTINEL"
-      ? "text-rw-danger"
-      : speaker === "RAMEN"
-        ? "text-rw-fg"
-        : "text-rw-muted";
-  return (
-    <button
-      type="button"
-      onClick={onAdvance}
-      className="absolute bottom-16 left-1/2 z-20 w-[min(540px,88vw)] -translate-x-1/2 border-l-2 border-rw-border bg-rw-bg/90 px-5 py-4 text-left"
-    >
-      <div className={`mb-2 font-sans text-xs uppercase tracking-widest ${tone}`}>{speaker}</div>
-      <div className="min-h-12 font-sans text-base leading-relaxed text-rw-fg">{text}</div>
-      <div className="mt-3 text-right font-sans text-xs tracking-widest text-rw-subtle">
-        {complete ? "SPACE" : "…"}
-      </div>
-    </button>
-  );
-}
-
 function EndScreen({ title, html }: { title: string; html: string }) {
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-rw-bg px-6 text-center">
@@ -376,7 +334,7 @@ function TouchControls({
         onClick={onAdvance}
         className="absolute bottom-24 right-6 z-30 min-h-11 border border-rw-border bg-rw-bg-elevated/80 px-4 font-sans text-xs tracking-widest text-rw-muted"
       >
-        NEXT
+        SKIP
       </button>
     </>
   );

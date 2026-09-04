@@ -51,60 +51,50 @@ function isBackdrop(r: number, g: number, b: number) {
   return false;
 }
 
+/**
+ * Removes the magenta chroma-key backdrop these renders were shot against.
+ * Gappy foliage (thin pine needles, twig tips) leaves thousands of
+ * anti-aliased pixels that are a blend of magenta and foreground color,
+ * scattered all through the canopy — not just at the outer silhouette. Two
+ * problems that causes if handled naively:
+ *  1. An edge-connected flood fill can't reach magenta trapped in gaps deep
+ *     inside the silhouette, leaving solid opaque magenta blotches — the
+ *     "purple sprite" look that shows up once a bright light (a street lamp)
+ *     hits the card.
+ *  2. Even after keying the solid magenta, the anti-aliased blend pixels
+ *     around every needle edge are still magenta-tinted; a hard alpha cutoff
+ *     leaves them as visible colored specks instead of fading cleanly.
+ * Fix: key every backdrop-matching pixel globally (not edge-flood-fill), then
+ * fade + de-tint ("spill suppress") every partially-magenta blend pixel.
+ */
 function keyFromEdges(ctx: CanvasRenderingContext2D, w: number, h: number) {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
   const n = w * h;
-  const seen = new Uint8Array(n);
-  const q = new Int32Array(n);
-  let head = 0;
-  let tail = 0;
 
-  const push = (x: number, y: number) => {
-    if (x < 0 || y < 0 || x >= w || y >= h) return;
-    const i = y * w + x;
-    if (seen[i]) return;
-    const o = i * 4;
-    if (!isBackdrop(d[o], d[o + 1], d[o + 2])) return;
-    seen[i] = 1;
-    q[tail++] = i;
-  };
-
-  for (let x = 0; x < w; x++) {
-    push(x, 0);
-    push(x, h - 1);
-  }
-  for (let y = 0; y < h; y++) {
-    push(0, y);
-    push(w - 1, y);
-  }
-
-  while (head < tail) {
-    const i = q[head++];
-    const x = i % w;
-    const y = (i / w) | 0;
-    d[i * 4 + 3] = 0;
-    push(x - 1, y);
-    push(x + 1, y);
-    push(x, y - 1);
-    push(x, y + 1);
-  }
+  const SPILL_FLOOR = 4;
+  const SPILL_RANGE = 40;
 
   for (let i = 0; i < n; i++) {
-    if (d[i * 4 + 3] === 0) continue;
-    const x = i % w;
-    const y = (i / w) | 0;
-    const edge =
-      (x > 0 && d[(i - 1) * 4 + 3] === 0) ||
-      (x + 1 < w && d[(i + 1) * 4 + 3] === 0) ||
-      (y > 0 && d[(i - w) * 4 + 3] === 0) ||
-      (y + 1 < h && d[(i + w) * 4 + 3] === 0);
-    if (!edge) continue;
-    const r = d[i * 4];
-    const g = d[i * 4 + 1];
-    const b = d[i * 4 + 2];
-    if (isBackdrop(r, g, b) || r > 170 && b > 170 && g < 140) {
-      d[i * 4 + 3] = 0;
+    const o = i * 4;
+    const r = d[o];
+    const g = d[o + 1];
+    const b = d[o + 2];
+
+    if (isBackdrop(r, g, b)) {
+      d[o + 3] = 0;
+      continue;
+    }
+
+    // Magenta = high R & B, low G, so (min(r,b) - g) measures how much
+    // magenta is blended into this pixel even though it didn't cross the
+    // hard isBackdrop threshold. Fade alpha and pull the tint back out.
+    const spill = Math.max(0, Math.min(r, b) - g);
+    if (spill > SPILL_FLOOR) {
+      const t = Math.min(1, (spill - SPILL_FLOOR) / SPILL_RANGE);
+      d[o + 3] = Math.round(d[o + 3] * (1 - t));
+      d[o] = Math.max(0, Math.round(r - spill * t));
+      d[o + 2] = Math.max(0, Math.round(b - spill * t));
     }
   }
 
