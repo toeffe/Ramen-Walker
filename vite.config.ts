@@ -18,8 +18,11 @@ export default defineConfig(({ command, isPreview }) => ({
   resolve: { tsconfigPaths: true },
   plugins: [
     tailwindcss(),
-    tanstackStart(),
-    ...(command === "build" || isPreview ? [nitro({ preset: "vercel" })] : []),
+    tanstackStart({
+      spa: { enabled: true },
+      prerender: { enabled: true, crawlLinks: true },
+    }),
+    ...(command === "build" || isPreview ? [nitro({ preset: "github_pages" })] : []),
     viteReact(),
   ],
 }));
