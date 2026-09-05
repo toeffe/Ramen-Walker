@@ -135,6 +135,8 @@ export class RamenGame {
   private trayRoll = 0;
   private trayPitch = 0;
   private trayRollV = 0;
+  private eventKickV = 0;
+  private eventKickT = 0;
   // --- co-op "waiter" camera -------------------------------------------
   // A second, independently rendered camera that always looks at the
   // tray from the opposite side of the walker — i.e. facing the walker,
@@ -878,6 +880,8 @@ export class RamenGame {
     this.trayRoll = 0;
     this.trayPitch = 0;
     this.trayRollV = 0;
+    this.eventKickV = 0;
+    this.eventKickT = 0;
     this.trayPitchV = 0;
     this.sloshX = 0;
     this.sloshZ = 0;
@@ -964,6 +968,18 @@ export class RamenGame {
     });
     this.say("you_okay_again");
     if (!this.remoteDriven) this.tryLock();
+  }
+
+  private kickTray(amount: number) {
+    if (!this.waiterOwnsTray) {
+      this.trayRollV += amount;
+      return;
+    }
+    // Co-op: story kicks used to dump the bowl before the waiter could
+    // see them (network delay). Soften and spread over 2s so the warning
+    // and the tilt arrive as something they can fight.
+    this.eventKickV += amount * 0.46;
+    this.eventKickT = Math.max(this.eventKickT, 2);
   }
 
   private warn(text: string) {
@@ -1392,7 +1408,7 @@ export class RamenGame {
         run: () => {
           this.bowlHeavy = 8;
           this.trayDamage = Math.min(1, this.trayDamage + 0.08);
-          this.trayRollV += 0.7;
+          this.kickTray(0.7);
           this.warn("THE BOWL GOT HEAVIER");
         },
       },
@@ -1409,7 +1425,7 @@ export class RamenGame {
       {
         distance: 310,
         run: () => {
-          this.trayRollV += 1.2;
+          this.kickTray(1.2);
           this.hostFx(2);
           this.audio.twig();
           this.warn("COLD PATCH");
@@ -1490,7 +1506,7 @@ export class RamenGame {
       {
         distance: 553,
         run: () => {
-          this.trayRollV += 1.8;
+          this.kickTray(1.8);
           this.trayDamage = Math.min(1, this.trayDamage + 0.06);
           this.hostFx(2);
           this.audio.twig();
@@ -1539,7 +1555,7 @@ export class RamenGame {
       {
         distance: 801,
         run: () => {
-          this.trayRollV += 1.6;
+          this.kickTray(1.6);
           this.hostFx(2);
           this.audio.twig();
           this.warn("THE ROAD NARROWS");
@@ -1811,15 +1827,25 @@ export class RamenGame {
       this.camera.position.y = bob;
 
       const strain = this.trayStrain();
-      const G = (this.bowlHeavy > 0 ? 12.4 : 9.1) * (1 + strain * 0.42);
+      const coop = this.waiterOwnsTray;
+      const G =
+        (this.bowlHeavy > 0 ? (coop ? 10.2 : 12.4) : 9.1) * (1 + strain * 0.42);
       const MU_S = 0.2 * (1 - strain * 0.55);
       const MU_K = 0.11 * (1 - strain * 0.5);
       const restore = 4.2 * (1 - strain * 0.48) * (1 - this.hurryFatigue * 0.55) * (1 - this.roadShake * 0.4);
       const damp = 5.5 * (1 - strain * 0.38) * (1 - this.hurryFatigue * 0.5) * (1 - this.roadShake * 0.4);
-      const coop = this.waiterOwnsTray;
       const walkKick = coop ? 0.32 : 1;
 
-      this.trayRollV += this.balanceDx * ((coop ? 0.058 : 0.024) * (1 - strain * 0.22));
+      if (this.eventKickT > 0) {
+        const inject = this.eventKickV * Math.min(1, dt / this.eventKickT);
+        this.trayRollV += inject;
+        this.eventKickV -= inject;
+        this.eventKickT = Math.max(0, this.eventKickT - dt);
+        if (this.eventKickT <= 0) this.eventKickV = 0;
+      }
+
+      const tiltGain = coop ? (this.eventKickT > 0 ? 0.09 : 0.058) : 0.024;
+      this.trayRollV += this.balanceDx * (tiltGain * (1 - strain * 0.22));
       this.balanceDx = 0;
       this.balanceDy = 0;
       if (moving) {
